@@ -11,6 +11,7 @@ export default function SignupPage() {
     email: "",
     phone: "",
     address: "",
+    mapsUrl: "",
     password: "",
     confirmPassword: "",
   });
@@ -34,11 +35,15 @@ export default function SignupPage() {
       return;
     }
 
-    const { data: existingUsername } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", form.username)
-      .maybeSingle();
+    const { data: existingUsername, error: usernameError } = await supabase.rpc("username_exists", {
+      username_to_check: form.username,
+    });
+
+    if (usernameError) {
+      setLoading(false);
+      setMessage("Sistem belum bisa mengecek username. Pastikan SQL function username_exists sudah dibuat.");
+      return;
+    }
 
     if (existingUsername) {
       setLoading(false);
@@ -46,7 +51,7 @@ export default function SignupPage() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
@@ -55,13 +60,24 @@ export default function SignupPage() {
           username: form.username,
           phone: form.phone,
           address: form.address,
+          maps_url: form.mapsUrl,
         },
       },
     });
 
     setLoading(false);
     if (error) {
-      setMessage(error.message);
+      const lowerMessage = error.message.toLowerCase();
+      if (lowerMessage.includes("already") || lowerMessage.includes("registered")) {
+        setMessage("Email ini sudah terdaftar. Silakan login atau gunakan email lain.");
+      } else {
+        setMessage(error.message);
+      }
+      return;
+    }
+
+    if (data.user && data.user.identities?.length === 0) {
+      setMessage("Email ini sudah terdaftar. Silakan login atau gunakan email lain.");
       return;
     }
 
@@ -83,6 +99,26 @@ export default function SignupPage() {
     if (error) {
       setMessage(error.message);
     }
+  }
+
+  function useCurrentGps() {
+    setMessage("");
+    setSuccess(false);
+
+    if (!navigator.geolocation) {
+      setMessage("Browser ini tidak mendukung GPS.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        updateField("mapsUrl", `https://www.google.com/maps?q=${latitude},${longitude}`);
+      },
+      () => {
+        setMessage("Gagal mengambil titik GPS. Pastikan izin lokasi di browser aktif.");
+      },
+    );
   }
 
   return (
@@ -113,6 +149,34 @@ export default function SignupPage() {
             Alamat
             <textarea value={form.address} onChange={(event) => updateField("address", event.target.value)} required rows={3} className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
           </label>
+          <div className="grid gap-2 text-sm font-medium sm:col-span-2">
+            Titik GPS / Google Maps
+            <input
+              value={form.mapsUrl}
+              onChange={(event) => updateField("mapsUrl", event.target.value)}
+              placeholder="https://www.google.com/maps?q=..."
+              className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={useCurrentGps}
+                className="rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+              >
+                Gunakan Titik GPS Saya
+              </button>
+              {form.mapsUrl && (
+                <a
+                  href={form.mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Buka titik di Google Maps
+                </a>
+              )}
+            </div>
+          </div>
           <label className="grid gap-2 text-sm font-medium">
             Password
             <input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} required className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
