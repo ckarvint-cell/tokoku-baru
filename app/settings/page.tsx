@@ -11,6 +11,7 @@ type ProfileForm = {
   email: string;
   phone: string;
   address: string;
+  mapsUrl: string;
 };
 
 export default function SettingsPage() {
@@ -21,6 +22,7 @@ export default function SettingsPage() {
     email: "",
     phone: "",
     address: "",
+    mapsUrl: "",
   });
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function SettingsPage() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("full_name, username, email, phone, address")
+        .select("full_name, username, email, phone, address, maps_url")
         .eq("id", user.id)
         .single();
 
@@ -52,6 +54,7 @@ export default function SettingsPage() {
         email: data?.email || user.email || "",
         phone: data?.phone || "",
         address: data?.address || "",
+        mapsUrl: data?.maps_url || "",
       });
       setLoading(false);
     }
@@ -89,6 +92,7 @@ export default function SettingsPage() {
         username: form.username,
         phone: form.phone,
         address: form.address,
+        maps_url: form.mapsUrl,
       })
       .eq("id", userId);
 
@@ -106,6 +110,26 @@ export default function SettingsPage() {
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  function useCurrentGps() {
+    setMessage("");
+    setSuccess(false);
+
+    if (!navigator.geolocation) {
+      setMessage("Browser ini tidak mendukung GPS.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        updateField("mapsUrl", `https://www.google.com/maps?q=${latitude},${longitude}`);
+      },
+      () => {
+        setMessage("Gagal mengambil titik GPS. Pastikan izin lokasi di browser aktif.");
+      },
+    );
   }
 
   if (loading) {
@@ -180,6 +204,35 @@ export default function SettingsPage() {
                 className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
               />
             </label>
+
+            <div className="grid gap-2 text-sm font-medium sm:col-span-2">
+              Titik GPS / Google Maps
+              <input
+                value={form.mapsUrl}
+                onChange={(event) => updateField("mapsUrl", event.target.value)}
+                placeholder="https://www.google.com/maps?q=..."
+                className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={useCurrentGps}
+                  className="rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                >
+                  Gunakan Titik GPS Saya
+                </button>
+                {form.mapsUrl && (
+                  <a
+                    href={form.mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Buka titik di Google Maps
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
 
           {message && (
