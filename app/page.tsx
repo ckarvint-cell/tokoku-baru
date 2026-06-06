@@ -20,6 +20,7 @@ function getGreeting() {
 export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [now, setNow] = useState(new Date());
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -30,7 +31,23 @@ export default function Home() {
     async function loadProfile() {
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData.session?.user;
-      if (!user) return;
+      const returnedFromEmailLink =
+        window.location.hash.includes("access_token") ||
+        window.location.hash.includes("type=signup") ||
+        window.location.search.includes("code=");
+
+      if (!user) {
+        if (returnedFromEmailLink) {
+          setNotice("Verifikasi sedang diproses. Silakan login setelah beberapa detik.");
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+        return;
+      }
+
+      if (returnedFromEmailLink && user.email_confirmed_at) {
+        setNotice("Email berhasil diverifikasi. Akun Anda sudah aktif.");
+        window.history.replaceState(null, "", window.location.pathname);
+      }
 
       const { data } = await supabase
         .from("profiles")
@@ -94,6 +111,12 @@ export default function Home() {
       </header>
 
       <section className="mx-auto max-w-6xl px-5 py-10">
+        {notice && (
+          <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {notice}
+          </div>
+        )}
+
         <div className="grid gap-6 rounded-lg border border-rose-100 bg-white p-6 shadow-sm md:grid-cols-[1fr_280px] md:p-8">
           <div>
             <p className="text-sm font-medium text-rose-600">
