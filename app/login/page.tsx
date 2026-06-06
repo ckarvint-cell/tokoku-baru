@@ -18,11 +18,17 @@ export default function LoginPage() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
     if (error) {
       setMessage(error.message);
+      return;
+    }
+
+    if (!data.user?.email_confirmed_at) {
+      await supabase.auth.signOut();
+      setMessage("Email belum diverifikasi. Silakan cek email dan klik link verifikasi terlebih dahulu.");
       return;
     }
 

@@ -81,6 +81,7 @@ export default function SignupPage() {
       return;
     }
 
+    await supabase.auth.signOut();
     setSuccess(true);
     setMessage("Pendaftaran berhasil. Silakan cek email untuk verifikasi akun.");
   }
