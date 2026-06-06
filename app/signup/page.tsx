@@ -69,6 +69,22 @@ export default function SignupPage() {
     setMessage("Pendaftaran berhasil. Silakan cek email untuk verifikasi akun.");
   }
 
+  async function signupWithGoogle() {
+    setMessage("");
+    setSuccess(false);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#fbf7f4] px-5 py-10 text-slate-950">
       <form onSubmit={handleSignup} className="w-full max-w-xl rounded-lg border border-rose-100 bg-white p-6 shadow-sm">
@@ -115,6 +131,14 @@ export default function SignupPage() {
 
         <button type="submit" disabled={loading} className="mt-5 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">
           {loading ? "Memproses..." : "Daftar"}
+        </button>
+
+        <button
+          type="button"
+          onClick={signupWithGoogle}
+          className="mt-3 w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-900 hover:bg-slate-50"
+        >
+          Daftar dengan Google
         </button>
 
         <p className="mt-5 text-center text-sm text-slate-600">
