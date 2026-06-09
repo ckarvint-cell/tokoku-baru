@@ -18,6 +18,7 @@ type Product = {
   aktif: boolean;
   image_urls: string[];
   created_at: string;
+  updated_at: string | null;
 };
 
 type Category = {
@@ -33,6 +34,16 @@ const PRODUCT_BUCKET = "product-images";
 function getDiscountedPrice(price: number, discountPercent: number | null) {
   if (!discountPercent) return price;
   return price - price * (discountPercent / 100);
+}
+
+function formatShortDate(date: string | null) {
+  if (!date) return "-";
+
+  return new Date(date).toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function AdminProductsPage() {
@@ -92,7 +103,7 @@ export default function AdminProductsPage() {
   async function loadProducts() {
     const { data, error } = await supabase
       .from("products")
-      .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at")
+      .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at,updated_at")
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -535,7 +546,7 @@ export default function AdminProductsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
+            <table className="w-full min-w-[860px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3">No</th>
@@ -543,7 +554,6 @@ export default function AdminProductsPage() {
                   <th className="px-5 py-3">Kategori</th>
                   <th className="px-5 py-3">Harga</th>
                   <th className="px-5 py-3">Stok</th>
-                  <th className="px-5 py-3">Tanggal</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Aksi</th>
                 </tr>
@@ -562,6 +572,9 @@ export default function AdminProductsPage() {
                         <div>
                           <p className="font-bold">{product.nama_produk}</p>
                           <p className="line-clamp-1 text-xs text-slate-500">{product.deskripsi || "-"}</p>
+                          <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                            Dibuat: {formatShortDate(product.created_at)} · Diubah: {formatShortDate(product.updated_at)}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -575,13 +588,6 @@ export default function AdminProductsPage() {
                       )}
                     </td>
                     <td className="px-5 py-4">{product.stok}</td>
-                    <td className="px-5 py-4 text-slate-500">
-                      {new Date(product.created_at).toLocaleDateString("id-ID", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
                     <td className="px-5 py-4">
                       <select
                         value={product.aktif ? "aktif" : "nonaktif"}
@@ -606,7 +612,7 @@ export default function AdminProductsPage() {
                 ))}
                 {visibleProducts.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
+                    <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
                       Tidak ada produk yang cocok dengan filter.
                     </td>
                   </tr>
