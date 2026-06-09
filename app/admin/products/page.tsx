@@ -22,6 +22,11 @@ type Product = {
 
 const PRODUCT_BUCKET = "product-images";
 
+function getDiscountedPrice(price: number, discountPercent: number | null) {
+  if (!discountPercent) return price;
+  return price - price * (discountPercent / 100);
+}
+
 export default function AdminProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -120,6 +125,10 @@ export default function AdminProductsPage() {
     try {
       if (files.length > 5) {
         throw new Error("Foto produk maksimal 5 file.");
+      }
+
+      if (form.hargaDiskon && Number(form.hargaDiskon) > 100) {
+        throw new Error("Diskon persen tidak boleh lebih dari 100.");
       }
 
       const imageUrls = await uploadProductImages();
@@ -237,8 +246,8 @@ export default function AdminProductsPage() {
                 <input type="number" min="0" value={form.harga} onChange={(event) => updateField("harga", event.target.value)} required className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
               </label>
               <label className="grid gap-2 text-sm font-medium">
-                Harga Diskon
-                <input type="number" min="0" value={form.hargaDiskon} onChange={(event) => updateField("hargaDiskon", event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
+                Diskon Persen
+                <input type="number" min="0" max="100" value={form.hargaDiskon} onChange={(event) => updateField("hargaDiskon", event.target.value)} placeholder="Contoh: 10" className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
               </label>
             </div>
 
@@ -320,8 +329,12 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-4">{product.kategori || "-"}</td>
                     <td className="px-5 py-4">
-                      <p className="font-bold">Rp {Number(product.harga_diskon || product.harga).toLocaleString("id-ID")}</p>
-                      {product.harga_diskon && <p className="text-xs text-slate-400 line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</p>}
+                      <p className="font-bold">Rp {getDiscountedPrice(Number(product.harga), product.harga_diskon).toLocaleString("id-ID")}</p>
+                      {product.harga_diskon && (
+                        <p className="text-xs text-slate-400">
+                          <span className="line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-4">{product.stok}</td>
                     <td className="px-5 py-4">

@@ -30,6 +30,105 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
+function getDiscountedPrice(price: number, discountPercent: number | null) {
+  if (!discountPercent) return price;
+  return price - price * (discountPercent / 100);
+}
+
+function ProductCard({ product }: { product: Product }) {
+  const [imageIndex, setImageIndex] = useState(0);
+  const images = product.image_urls?.length ? product.image_urls : [];
+  const currentImage = images[imageIndex];
+  const finalPrice = getDiscountedPrice(Number(product.harga), product.harga_diskon);
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setImageIndex((current) => (current + 1) % images.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [images.length]);
+
+  function previousImage() {
+    if (images.length <= 1) return;
+    setImageIndex((current) => (current - 1 + images.length) % images.length);
+  }
+
+  function nextImage() {
+    if (images.length <= 1) return;
+    setImageIndex((current) => (current + 1) % images.length);
+  }
+
+  return (
+    <article className="overflow-hidden rounded-lg border border-rose-100 bg-white shadow-sm">
+      <div className="relative aspect-[4/3] bg-rose-50">
+        {currentImage ? (
+          <img src={currentImage} alt={product.nama_produk} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">Belum ada foto</div>
+        )}
+
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={previousImage}
+              className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-xl font-bold shadow-sm"
+              aria-label="Foto sebelumnya"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={nextImage}
+              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-xl font-bold shadow-sm"
+              aria-label="Foto berikutnya"
+            >
+              ›
+            </button>
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+              {images.map((image, index) => (
+                <button
+                  key={image}
+                  type="button"
+                  onClick={() => setImageIndex(index)}
+                  className={`h-2 w-2 rounded-full ${index === imageIndex ? "bg-white" : "bg-white/50"}`}
+                  aria-label={`Lihat foto ${index + 1}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold">{product.nama_produk}</h3>
+            <p className="mt-1 text-sm text-slate-500">{product.kategori || "Tanpa kategori"}</p>
+          </div>
+          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
+        </div>
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
+        <div className="mt-5 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-lg font-bold">Rp {finalPrice.toLocaleString("id-ID")}</p>
+            {product.harga_diskon && (
+              <p className="text-sm text-slate-400">
+                <span className="line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
+              </p>
+            )}
+          </div>
+          <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
+            Keranjang
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -186,34 +285,7 @@ export default function Home() {
 
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
-              <article key={product.id} className="overflow-hidden rounded-lg border border-rose-100 bg-white shadow-sm">
-                <div className="aspect-[4/3] bg-rose-50">
-                  {product.image_urls?.[0] ? (
-                    <img src={product.image_urls[0]} alt={product.nama_produk} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-slate-500">Belum ada foto</div>
-                  )}
-                </div>
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-bold">{product.nama_produk}</h3>
-                      <p className="mt-1 text-sm text-slate-500">{product.kategori || "Tanpa kategori"}</p>
-                    </div>
-                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
-                  </div>
-                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
-                  <div className="mt-5 flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-bold">Rp {Number(product.harga_diskon || product.harga).toLocaleString("id-ID")}</p>
-                      {product.harga_diskon && <p className="text-sm text-slate-400 line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</p>}
-                    </div>
-                    <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                      Keranjang
-                    </button>
-                  </div>
-                </div>
-              </article>
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
 
