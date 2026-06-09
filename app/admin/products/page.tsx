@@ -396,8 +396,8 @@ export default function AdminProductsPage() {
                     <td className="px-5 py-4">
                       <p className="font-bold"><span className="text-[0.5em] align-super">Rp</span> {getDiscountedPrice(Number(product.harga), product.harga_diskon).toLocaleString("id-ID")}</p>
                       {product.harga_diskon && (
-                        <p className="text-xs text-slate-400 line-through decoration-slate-400 decoration-1">
-                          <span className="text-[0.5em] align-middle">Rp</span> <span>{Number(product.harga).toLocaleString("id-ID")}</span>
+                        <p className="text-xs text-slate-400">
+                          <span className="text-[0.5em] align-middle">Rp</span> <span className="line-through decoration-slate-400 decoration-1">{Number(product.harga).toLocaleString("id-ID")}</span>
                         </p>
                       )}
                     </td>
