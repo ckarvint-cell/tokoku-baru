@@ -39,10 +39,12 @@ function getDiscountedPrice(price: number, discountPercent: number | null) {
 function formatShortDate(date: string | null) {
   if (!date) return "-";
 
-  return new Date(date).toLocaleDateString("id-ID", {
+  return new Date(date).toLocaleString("id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -572,8 +574,9 @@ export default function AdminProductsPage() {
                         <div>
                           <p className="font-bold">{product.nama_produk}</p>
                           <p className="line-clamp-1 text-xs text-slate-500">{product.deskripsi || "-"}</p>
-                          <p className="mt-1 text-[11px] leading-5 text-slate-400">
-                            Dibuat: {formatShortDate(product.created_at)} · Diubah: {formatShortDate(product.updated_at)}
+                          <p className="mt-1 grid gap-0.5 text-[11px] leading-4 text-slate-400">
+                            <span>Dibuat: {formatShortDate(product.created_at)}</span>
+                            <span>Diubah: {formatShortDate(product.updated_at)}</span>
                           </p>
                         </div>
                       </div>
