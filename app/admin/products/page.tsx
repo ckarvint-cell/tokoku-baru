@@ -35,6 +35,8 @@ export default function AdminProductsPage() {
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [form, setForm] = useState({
     namaProduk: "",
     kategori: "",
@@ -89,8 +91,46 @@ export default function AdminProductsPage() {
   }
 
   function handleFiles(selectedFiles: FileList | null) {
-    const nextFiles = Array.from(selectedFiles ?? []).slice(0, 5);
+    const remainingSlots = Math.max(5 - existingImageUrls.length, 0);
+    const nextFiles = Array.from(selectedFiles ?? []).slice(0, remainingSlots);
     setFiles(nextFiles);
+  }
+
+  function resetForm() {
+    setForm({
+      namaProduk: "",
+      kategori: "",
+      deskripsi: "",
+      harga: "",
+      hargaDiskon: "",
+      stok: "",
+      aktif: true,
+    });
+    setFiles([]);
+    setExistingImageUrls([]);
+    setEditingProductId(null);
+  }
+
+  function startEdit(product: Product) {
+    setEditingProductId(product.id);
+    setExistingImageUrls(product.image_urls ?? []);
+    setFiles([]);
+    setMessage("");
+    setSuccess(false);
+    setForm({
+      namaProduk: product.nama_produk,
+      kategori: product.kategori ?? "",
+      deskripsi: product.deskripsi ?? "",
+      harga: String(product.harga),
+      hargaDiskon: product.harga_diskon ? String(product.harga_diskon) : "",
+      stok: String(product.stok),
+      aktif: product.aktif,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function removeExistingImage(imageUrl: string) {
+    setExistingImageUrls((current) => current.filter((url) => url !== imageUrl));
   }
 
   async function uploadProductImages() {
@@ -116,14 +156,16 @@ export default function AdminProductsPage() {
     return imageUrls;
   }
 
-  async function addProduct(event: FormEvent<HTMLFormElement>) {
+  async function saveProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setMessage("");
     setSuccess(false);
 
     try {
-      if (files.length > 5) {
+      const wasEditing = Boolean(editingProductId);
+
+      if (existingImageUrls.length + files.length > 5) {
         throw new Error("Foto produk maksimal 5 file.");
       }
 
@@ -131,8 +173,9 @@ export default function AdminProductsPage() {
         throw new Error("Diskon persen tidak boleh lebih dari 100.");
       }
 
-      const imageUrls = await uploadProductImages();
-      const { error } = await supabase.from("products").insert({
+      const uploadedImageUrls = await uploadProductImages();
+      const imageUrls = [...existingImageUrls, ...uploadedImageUrls];
+      const payload = {
         nama_produk: form.namaProduk,
         kategori: form.kategori,
         deskripsi: form.deskripsi,
@@ -141,24 +184,19 @@ export default function AdminProductsPage() {
         stok: Number(form.stok),
         aktif: form.aktif,
         image_urls: imageUrls,
-      });
+      };
+
+      const { error } = editingProductId
+        ? await supabase.from("products").update(payload).eq("id", editingProductId)
+        : await supabase.from("products").insert(payload);
 
       if (error) {
         throw new Error(error.message);
       }
 
-      setForm({
-        namaProduk: "",
-        kategori: "",
-        deskripsi: "",
-        harga: "",
-        hargaDiskon: "",
-        stok: "",
-        aktif: true,
-      });
-      setFiles([]);
+      resetForm();
       setSuccess(true);
-      setMessage("Produk berhasil ditambahkan.");
+      setMessage(wasEditing ? "Produk berhasil diperbarui." : "Produk berhasil ditambahkan.");
       await loadProducts();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Gagal menyimpan produk.");
@@ -226,8 +264,15 @@ export default function AdminProductsPage() {
       </header>
 
       <section className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[420px_1fr]">
-        <form onSubmit={addProduct} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-bold">Tambah Produk</h2>
+        <form onSubmit={saveProduct} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold">{editingProductId ? "Edit Produk" : "Tambah Produk"}</h2>
+            {editingProductId && (
+              <button type="button" onClick={resetForm} className="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold">
+                Batal Edit
+              </button>
+            )}
+          </div>
 
           <div className="mt-5 grid gap-4">
             <label className="grid gap-2 text-sm font-medium">
@@ -262,9 +307,29 @@ export default function AdminProductsPage() {
             </label>
 
             <label className="grid gap-2 text-sm font-medium">
-              Foto Produk Maksimal 5
+              {editingProductId ? "Tambah Foto Baru Maksimal Total 5" : "Foto Produk Maksimal 5"}
               <input type="file" accept="image/*" multiple onChange={(event) => handleFiles(event.target.files)} className="rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-1.5 file:text-rose-700" />
             </label>
+
+            {existingImageUrls.length > 0 && (
+              <div className="grid gap-2">
+                <p className="text-sm font-medium">Foto Saat Ini</p>
+                <div className="grid grid-cols-5 gap-2">
+                  {existingImageUrls.map((imageUrl) => (
+                    <div key={imageUrl} className="relative aspect-square overflow-hidden rounded-md bg-slate-100">
+                      <img src={imageUrl} alt="Foto produk" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeExistingImage(imageUrl)}
+                        className="absolute right-1 top-1 rounded bg-white/90 px-1.5 py-0.5 text-[11px] font-bold text-rose-700 shadow-sm"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {files.length > 0 && (
               <div className="grid grid-cols-5 gap-2">
@@ -289,7 +354,7 @@ export default function AdminProductsPage() {
           )}
 
           <button type="submit" disabled={saving} className="mt-5 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">
-            {saving ? "Menyimpan..." : "Tambah Produk"}
+            {saving ? "Menyimpan..." : editingProductId ? "Simpan Perubahan" : "Tambah Produk"}
           </button>
         </form>
 
@@ -344,10 +409,13 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
-                        <button onClick={() => toggleActive(product)} className="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold">
+                        <button type="button" onClick={() => startEdit(product)} className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => toggleActive(product)} className="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold">
                           {product.aktif ? "Nonaktifkan" : "Aktifkan"}
                         </button>
-                        <button onClick={() => deleteProduct(product.id)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
+                        <button type="button" onClick={() => deleteProduct(product.id)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
                           Hapus
                         </button>
                       </div>
