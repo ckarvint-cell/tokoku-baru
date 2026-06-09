@@ -115,8 +115,8 @@ function ProductCard({ product }: { product: Product }) {
           <div>
             <p className="text-lg font-bold"><span className="text-[0.5em] align-super">Rp</span> {finalPrice.toLocaleString("id-ID")}</p>
             {product.harga_diskon && (
-              <p className="text-sm text-slate-400">
-                <span className="line-through"><span className="text-[0.5em] align-super">Rp</span> {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
+              <p className="text-sm text-slate-400 line-through decoration-slate-400 decoration-1">
+                <span className="text-[0.5em] align-middle">Rp</span> <span>{Number(product.harga).toLocaleString("id-ID")}</span>
               </p>
             )}
           </div>
