@@ -28,6 +28,7 @@ type Product = {
 
 type CartItem = Product & {
   qty: number;
+  note: string;
 };
 
 type CheckoutForm = {
@@ -149,6 +150,7 @@ function CartPanel({
   onDecrease,
   onRemove,
   onCheckout,
+  onUpdateNote,
 }: {
   cart: CartItem[];
   onClose: () => void;
@@ -156,6 +158,7 @@ function CartPanel({
   onDecrease: (productId: string) => void;
   onRemove: (productId: string) => void;
   onCheckout: () => void;
+  onUpdateNote: (productId: string, note: string) => void;
 }) {
   const subtotal = cart.reduce((total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty, 0);
   const totalQty = cart.reduce((total, item) => total + item.qty, 0);
@@ -242,6 +245,17 @@ function CartPanel({
                           </button>
                         </div>
                       </div>
+
+                      <label className="mt-3 grid gap-1 text-xs font-medium text-slate-500">
+                        Catatan produk
+                        <textarea
+                          value={item.note}
+                          onChange={(event) => onUpdateNote(item.id, event.target.value)}
+                          rows={2}
+                          placeholder="Contoh: warna, ukuran, atau request khusus"
+                          className="resize-none rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-rose-400"
+                        />
+                      </label>
                     </div>
                   </div>
                 );
@@ -325,9 +339,12 @@ function CheckoutPanel({
             <p className="text-sm font-bold text-slate-900">Ringkasan Produk</p>
             <div className="mt-3 grid gap-2">
               {cart.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-slate-600">{item.nama_produk} x {item.qty}</span>
-                  <strong>Rp {(getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty).toLocaleString("id-ID")}</strong>
+                <div key={item.id} className="grid gap-1 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate text-slate-600">{item.nama_produk} x {item.qty}</span>
+                    <strong>Rp {(getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty).toLocaleString("id-ID")}</strong>
+                  </div>
+                  {item.note && <p className="text-xs leading-5 text-slate-500">Catatan: {item.note}</p>}
                 </div>
               ))}
             </div>
@@ -543,7 +560,7 @@ export default function Home() {
         return current.map((item) => (item.id === product.id ? { ...item, qty: Math.min(item.qty + 1, item.stok) } : item));
       }
 
-      return [...current, { ...product, qty: 1 }];
+      return [...current, { ...product, qty: 1, note: "" }];
     });
     setCartOpen(true);
   }
@@ -564,6 +581,10 @@ export default function Home() {
 
   function removeFromCart(productId: string) {
     setCart((current) => current.filter((item) => item.id !== productId));
+  }
+
+  function updateCartNote(productId: string, note: string) {
+    setCart((current) => current.map((item) => (item.id === productId ? { ...item, note } : item)));
   }
 
   function updateCheckoutField(name: keyof CheckoutForm, value: string) {
@@ -731,6 +752,7 @@ export default function Home() {
           onDecrease={decreaseCartQty}
           onRemove={removeFromCart}
           onCheckout={openCheckout}
+          onUpdateNote={updateCartNote}
         />
       )}
 
