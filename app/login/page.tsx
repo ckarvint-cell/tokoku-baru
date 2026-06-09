@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [resendingVerification, setResendingVerification] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [canResendVerification, setCanResendVerification] = useState(false);
+  const [verificationCooldown, setVerificationCooldown] = useState(0);
 
   useEffect(() => {
     if (!window.location.search.includes("verified=1")) {
@@ -29,6 +30,18 @@ export default function LoginPage() {
 
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (verificationCooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setVerificationCooldown((current) => Math.max(current - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [verificationCooldown]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,6 +91,10 @@ export default function LoginPage() {
   }
 
   async function resendVerificationEmail() {
+    if (verificationCooldown > 0) {
+      return;
+    }
+
     if (!email) {
       setSuccess(false);
       setMessage("Isi email terlebih dahulu untuk mengirim ulang verifikasi.");
@@ -105,6 +122,7 @@ export default function LoginPage() {
 
     setSuccess(true);
     setCanResendVerification(false);
+    setVerificationCooldown(60);
     setMessage("Email verifikasi sudah dikirim ulang. Silakan cek inbox atau spam.");
   }
 
@@ -182,10 +200,14 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={resendVerificationEmail}
-                disabled={resendingVerification}
+                disabled={resendingVerification || verificationCooldown > 0}
                 className="mt-3 rounded-md bg-white px-3 py-2 text-sm font-bold text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
               >
-                {resendingVerification ? "Mengirim..." : "Kirim ulang verifikasi"}
+                {resendingVerification
+                  ? "Mengirim..."
+                  : verificationCooldown > 0
+                    ? `Tunggu ${verificationCooldown} detik`
+                    : "Kirim ulang verifikasi"}
               </button>
             )}
           </div>

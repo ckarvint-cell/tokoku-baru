@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 export default function SignupPage() {
@@ -20,6 +20,19 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [duplicateEmail, setDuplicateEmail] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationCooldown, setVerificationCooldown] = useState(0);
+
+  useEffect(() => {
+    if (verificationCooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setVerificationCooldown((current) => Math.max(current - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [verificationCooldown]);
 
   function updateField(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -92,6 +105,10 @@ export default function SignupPage() {
   }
 
   async function resendVerificationEmail() {
+    if (verificationCooldown > 0) {
+      return;
+    }
+
     if (!form.email) {
       setSuccess(false);
       setMessage("Isi email terlebih dahulu untuk mengirim ulang verifikasi.");
@@ -119,6 +136,7 @@ export default function SignupPage() {
 
     setDuplicateEmail(false);
     setSuccess(true);
+    setVerificationCooldown(60);
     setMessage("Email verifikasi sudah dikirim ulang. Silakan cek inbox atau spam.");
   }
 
@@ -233,10 +251,14 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={resendVerificationEmail}
-                disabled={resendingVerification}
+                disabled={resendingVerification || verificationCooldown > 0}
                 className="mt-3 rounded-md bg-white px-3 py-2 text-sm font-bold text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
               >
-                {resendingVerification ? "Mengirim..." : "Kirim ulang verifikasi"}
+                {resendingVerification
+                  ? "Mengirim..."
+                  : verificationCooldown > 0
+                    ? `Tunggu ${verificationCooldown} detik`
+                    : "Kirim ulang verifikasi"}
               </button>
             )}
           </div>
