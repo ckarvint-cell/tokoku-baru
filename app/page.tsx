@@ -8,6 +8,9 @@ import { supabase } from "@/lib/supabase/client";
 
 type Profile = {
   full_name: string | null;
+  phone: string | null;
+  address: string | null;
+  maps_url: string | null;
   role: "customer" | "admin" | "manager";
 };
 
@@ -25,6 +28,14 @@ type Product = {
 
 type CartItem = Product & {
   qty: number;
+};
+
+type CheckoutForm = {
+  name: string;
+  phone: string;
+  address: string;
+  mapsUrl: string;
+  proofName: string;
 };
 
 function getGreeting() {
@@ -137,12 +148,14 @@ function CartPanel({
   onIncrease,
   onDecrease,
   onRemove,
+  onCheckout,
 }: {
   cart: CartItem[];
   onClose: () => void;
   onIncrease: (productId: string) => void;
   onDecrease: (productId: string) => void;
   onRemove: (productId: string) => void;
+  onCheckout: () => void;
 }) {
   const subtotal = cart.reduce((total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty, 0);
   const totalQty = cart.reduce((total, item) => total + item.qty, 0);
@@ -247,12 +260,193 @@ function CartPanel({
           <button
             type="button"
             disabled={cart.length === 0}
+            onClick={onCheckout}
             className="mt-4 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
           >
             Lanjut Checkout
           </button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function CheckoutPanel({
+  cart,
+  form,
+  confirming,
+  onClose,
+  onBackToCart,
+  onChange,
+  onUseGps,
+  onSubmit,
+  onConfirm,
+  onCancelConfirm,
+}: {
+  cart: CartItem[];
+  form: CheckoutForm;
+  confirming: boolean;
+  onClose: () => void;
+  onBackToCart: () => void;
+  onChange: (name: keyof CheckoutForm, value: string) => void;
+  onUseGps: () => void;
+  onSubmit: () => void;
+  onConfirm: () => void;
+  onCancelConfirm: () => void;
+}) {
+  const subtotal = cart.reduce((total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty, 0);
+  const totalQty = cart.reduce((total, item) => total + item.qty, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 px-4 py-5 backdrop-blur-sm" onClick={onClose}>
+      <section
+        className="mx-auto w-full max-w-2xl rounded-lg bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-rose-100 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-rose-500">Checkout</p>
+              <h2 className="mt-1 text-2xl font-bold">Konfirmasi Pembelian</h2>
+              <p className="mt-1 text-sm text-slate-500">{totalQty} item, subtotal Rp {subtotal.toLocaleString("id-ID")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 px-5 py-5">
+          <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3">
+            <p className="text-sm font-bold text-slate-900">Ringkasan Produk</p>
+            <div className="mt-3 grid gap-2">
+              {cart.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-slate-600">{item.nama_produk} x {item.qty}</span>
+                  <strong>Rp {(getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty).toLocaleString("id-ID")}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {confirming ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4">
+              <h3 className="text-lg font-bold text-emerald-900">Buat pesanan sekarang?</h3>
+              <p className="mt-2 text-sm leading-6 text-emerald-800">
+                Pastikan alamat, nomor WhatsApp, titik maps, dan bukti transfer sudah benar.
+              </p>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={onConfirm}
+                  className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white"
+                >
+                  Ya, Buat Pesanan
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelConfirm}
+                  className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"
+                >
+                  Tidak, Cek Lagi
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form
+              className="grid gap-4 sm:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSubmit();
+              }}
+            >
+              <label className="grid gap-2 text-sm font-medium">
+                Nama Penerima
+                <input
+                  value={form.name}
+                  onChange={(event) => onChange("name", event.target.value)}
+                  required
+                  className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                Nomor WhatsApp
+                <input
+                  value={form.phone}
+                  onChange={(event) => onChange("phone", event.target.value)}
+                  required
+                  className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                Alamat Pengiriman
+                <textarea
+                  value={form.address}
+                  onChange={(event) => onChange("address", event.target.value)}
+                  required
+                  rows={3}
+                  className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+                />
+              </label>
+              <div className="grid gap-2 text-sm font-medium sm:col-span-2">
+                Titik GPS / Google Maps
+                <input
+                  value={form.mapsUrl}
+                  onChange={(event) => onChange("mapsUrl", event.target.value)}
+                  placeholder="https://www.google.com/maps?q=..."
+                  className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+                />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={onUseGps}
+                    className="rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                  >
+                    Gunakan Titik GPS Saya
+                  </button>
+                  {form.mapsUrl && (
+                    <a
+                      href={form.mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Buka titik di Google Maps
+                    </a>
+                  )}
+                </div>
+              </div>
+              <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                Bukti Transfer
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => onChange("proofName", event.target.files?.[0]?.name || "")}
+                  required
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                />
+                {form.proofName && <span className="text-xs text-slate-500">File dipilih: {form.proofName}</span>}
+              </label>
+              <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
+                <button type="submit" className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white">
+                  Buat Pesanan
+                </button>
+                <button
+                  type="button"
+                  onClick={onBackToCart}
+                  className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"
+                >
+                  Kembali ke Keranjang
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -264,6 +458,15 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
+  const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>({
+    name: "",
+    phone: "",
+    address: "",
+    mapsUrl: "",
+    proofName: "",
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -294,11 +497,18 @@ export default function Home() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("full_name, role")
+        .select("full_name, phone, address, maps_url, role")
         .eq("id", user.id)
         .single();
 
       setProfile(data);
+      setCheckoutForm((current) => ({
+        ...current,
+        name: data?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || current.name,
+        phone: data?.phone || current.phone,
+        address: data?.address || current.address,
+        mapsUrl: data?.maps_url || current.mapsUrl,
+      }));
     }
 
     loadProfile();
@@ -354,6 +564,53 @@ export default function Home() {
 
   function removeFromCart(productId: string) {
     setCart((current) => current.filter((item) => item.id !== productId));
+  }
+
+  function updateCheckoutField(name: keyof CheckoutForm, value: string) {
+    setCheckoutForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function openCheckout() {
+    if (cart.length === 0) return;
+    setCartOpen(false);
+    setCheckoutOpen(true);
+    setConfirmingCheckout(false);
+  }
+
+  function closeCheckout() {
+    setCheckoutOpen(false);
+    setConfirmingCheckout(false);
+  }
+
+  function useCheckoutGps() {
+    setNotice("");
+
+    if (!navigator.geolocation) {
+      setNotice("Browser ini tidak mendukung GPS.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        updateCheckoutField("mapsUrl", `https://www.google.com/maps?q=${latitude},${longitude}`);
+      },
+      () => {
+        setNotice("Gagal mengambil titik GPS. Pastikan izin lokasi di browser aktif.");
+      },
+    );
+  }
+
+  function submitCheckoutForm() {
+    setConfirmingCheckout(true);
+  }
+
+  function confirmCheckout() {
+    setCart([]);
+    setCheckoutOpen(false);
+    setConfirmingCheckout(false);
+    setNotice("Pesanan berhasil dibuat di tampilan checkout. Step berikutnya kita sambungkan ke database Supabase.");
+    setCheckoutForm((current) => ({ ...current, proofName: "" }));
   }
 
   const name = profile?.full_name || "Pengunjung";
@@ -473,6 +730,26 @@ export default function Home() {
           onIncrease={increaseCartQty}
           onDecrease={decreaseCartQty}
           onRemove={removeFromCart}
+          onCheckout={openCheckout}
+        />
+      )}
+
+      {checkoutOpen && (
+        <CheckoutPanel
+          cart={cart}
+          form={checkoutForm}
+          confirming={confirmingCheckout}
+          onClose={closeCheckout}
+          onBackToCart={() => {
+            setCheckoutOpen(false);
+            setConfirmingCheckout(false);
+            setCartOpen(true);
+          }}
+          onChange={updateCheckoutField}
+          onUseGps={useCheckoutGps}
+          onSubmit={submitCheckoutForm}
+          onConfirm={confirmCheckout}
+          onCancelConfirm={() => setConfirmingCheckout(false)}
         />
       )}
     </main>
