@@ -113,10 +113,10 @@ function ProductCard({ product }: { product: Product }) {
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
         <div className="mt-5 flex items-end justify-between gap-3">
           <div>
-            <p className="text-lg font-bold">Rp {finalPrice.toLocaleString("id-ID")}</p>
+            <p className="text-lg font-bold"><span className="text-[0.5em] align-super">Rp</span> {finalPrice.toLocaleString("id-ID")}</p>
             {product.harga_diskon && (
               <p className="text-sm text-slate-400">
-                <span className="line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
+                <span className="line-through"><span className="text-[0.5em] align-super">Rp</span> {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
               </p>
             )}
           </div>

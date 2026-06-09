@@ -394,10 +394,10 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-4">{product.kategori || "-"}</td>
                     <td className="px-5 py-4">
-                      <p className="font-bold">Rp {getDiscountedPrice(Number(product.harga), product.harga_diskon).toLocaleString("id-ID")}</p>
+                      <p className="font-bold"><span className="text-[0.5em] align-super">Rp</span> {getDiscountedPrice(Number(product.harga), product.harga_diskon).toLocaleString("id-ID")}</p>
                       {product.harga_diskon && (
                         <p className="text-xs text-slate-400">
-                          <span className="line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
+                          <span className="line-through"><span className="text-[0.5em] align-super">Rp</span> {Number(product.harga).toLocaleString("id-ID")}</span> Diskon {product.harga_diskon}%
                         </p>
                       )}
                     </td>
