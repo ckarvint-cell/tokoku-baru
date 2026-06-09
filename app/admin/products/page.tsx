@@ -20,6 +20,11 @@ type Product = {
   created_at: string;
 };
 
+type Category = {
+  id: string;
+  nama: string;
+};
+
 const PRODUCT_BUCKET = "product-images";
 
 function getDiscountedPrice(price: number, discountPercent: number | null) {
@@ -30,6 +35,7 @@ function getDiscountedPrice(price: number, discountPercent: number | null) {
 export default function AdminProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -37,6 +43,7 @@ export default function AdminProductsPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState("");
   const [form, setForm] = useState({
     namaProduk: "",
     kategori: "",
@@ -69,6 +76,7 @@ export default function AdminProductsPage() {
       }
 
       await loadProducts();
+      await loadCategories();
       setLoading(false);
     }
 
@@ -83,6 +91,17 @@ export default function AdminProductsPage() {
 
     if (!error && data) {
       setProducts(data as Product[]);
+    }
+  }
+
+  async function loadCategories() {
+    const { data, error } = await supabase
+      .from("product_categories")
+      .select("id,nama")
+      .order("nama", { ascending: true });
+
+    if (!error && data) {
+      setCategories(data as Category[]);
     }
   }
 
@@ -131,6 +150,47 @@ export default function AdminProductsPage() {
 
   function removeExistingImage(imageUrl: string) {
     setExistingImageUrls((current) => current.filter((url) => url !== imageUrl));
+  }
+
+  async function addCategory() {
+    const cleanName = newCategory.trim();
+    if (!cleanName) return;
+
+    setMessage("");
+    setSuccess(false);
+
+    const { error } = await supabase.from("product_categories").insert({ nama: cleanName });
+
+    if (error) {
+      setMessage(error.code === "23505" ? "Kategori ini sudah ada." : error.message);
+      return;
+    }
+
+    setNewCategory("");
+    setSuccess(true);
+    setMessage("Kategori berhasil ditambahkan.");
+    await loadCategories();
+  }
+
+  async function deleteCategory(category: Category) {
+    const agree = window.confirm(`Hapus kategori "${category.nama}"? Produk lama tetap menyimpan nama kategori tersebut.`);
+    if (!agree) return;
+
+    const { error } = await supabase.from("product_categories").delete().eq("id", category.id);
+
+    if (error) {
+      setSuccess(false);
+      setMessage(error.message);
+      return;
+    }
+
+    if (form.kategori === category.nama) {
+      updateField("kategori", "");
+    }
+
+    setSuccess(true);
+    setMessage("Kategori berhasil dihapus.");
+    await loadCategories();
   }
 
   async function uploadProductImages() {
@@ -280,10 +340,52 @@ export default function AdminProductsPage() {
               <input value={form.namaProduk} onChange={(event) => updateField("namaProduk", event.target.value)} required className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
             </label>
 
-            <label className="grid gap-2 text-sm font-medium">
-              Kategori
-              <input value={form.kategori} onChange={(event) => updateField("kategori", event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
-            </label>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label className="grid gap-2 text-sm font-medium">
+                Kategori
+                <select
+                  value={form.kategori}
+                  onChange={(event) => updateField("kategori", event.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 outline-none focus:border-rose-400"
+                >
+                  <option value="">Pilih kategori</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.nama}>
+                      {category.nama}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid gap-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Kelola Kategori</p>
+                <div className="flex gap-2">
+                  <input
+                    value={newCategory}
+                    onChange={(event) => setNewCategory(event.target.value)}
+                    placeholder="Contoh: Baju Wanita"
+                    className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400"
+                  />
+                  <button type="button" onClick={addCategory} className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+                    Tambah
+                  </button>
+                </div>
+                {categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => deleteCategory(category)}
+                        className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-bold text-rose-700"
+                      >
+                        {category.nama} x
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium">
