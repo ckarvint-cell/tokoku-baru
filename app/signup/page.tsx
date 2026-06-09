@@ -18,6 +18,8 @@ export default function SignupPage() {
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
 
   function updateField(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -28,6 +30,7 @@ export default function SignupPage() {
     setLoading(true);
     setMessage("");
     setSuccess(false);
+    setDuplicateEmail(false);
 
     if (form.password !== form.confirmPassword) {
       setLoading(false);
@@ -69,7 +72,8 @@ export default function SignupPage() {
     if (error) {
       const lowerMessage = error.message.toLowerCase();
       if (lowerMessage.includes("already") || lowerMessage.includes("registered")) {
-        setMessage("Email ini sudah terdaftar. Silakan login atau gunakan email lain.");
+        setDuplicateEmail(true);
+        setMessage("Email ini sudah terdaftar. Jika belum verifikasi, kamu bisa kirim ulang email verifikasi.");
       } else {
         setMessage(error.message);
       }
@@ -77,7 +81,8 @@ export default function SignupPage() {
     }
 
     if (data.user && data.user.identities?.length === 0) {
-      setMessage("Email ini sudah terdaftar. Silakan login atau gunakan email lain.");
+      setDuplicateEmail(true);
+      setMessage("Email ini sudah terdaftar. Jika belum verifikasi, kamu bisa kirim ulang email verifikasi.");
       return;
     }
 
@@ -86,9 +91,41 @@ export default function SignupPage() {
     setMessage("Pendaftaran berhasil. Silakan cek email untuk verifikasi akun.");
   }
 
+  async function resendVerificationEmail() {
+    if (!form.email) {
+      setSuccess(false);
+      setMessage("Isi email terlebih dahulu untuk mengirim ulang verifikasi.");
+      return;
+    }
+
+    setResendingVerification(true);
+    setSuccess(false);
+    setMessage("");
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: form.email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login?verified=1`,
+      },
+    });
+
+    setResendingVerification(false);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setDuplicateEmail(false);
+    setSuccess(true);
+    setMessage("Email verifikasi sudah dikirim ulang. Silakan cek inbox atau spam.");
+  }
+
   async function signupWithGoogle() {
     setMessage("");
     setSuccess(false);
+    setDuplicateEmail(false);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -105,6 +142,7 @@ export default function SignupPage() {
   function useCurrentGps() {
     setMessage("");
     setSuccess(false);
+    setDuplicateEmail(false);
 
     if (!navigator.geolocation) {
       setMessage("Browser ini tidak mendukung GPS.");
@@ -189,9 +227,19 @@ export default function SignupPage() {
         </div>
 
         {message && (
-          <p className={`mt-4 rounded-md px-3 py-2 text-sm ${success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-            {message}
-          </p>
+          <div className={`mt-4 rounded-md px-3 py-2 text-sm ${success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+            <p>{message}</p>
+            {duplicateEmail && (
+              <button
+                type="button"
+                onClick={resendVerificationEmail}
+                disabled={resendingVerification}
+                className="mt-3 rounded-md bg-white px-3 py-2 text-sm font-bold text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
+              >
+                {resendingVerification ? "Mengirim..." : "Kirim ulang verifikasi"}
+              </button>
+            )}
+          </div>
         )}
 
         <button type="submit" disabled={loading} className="mt-5 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">
