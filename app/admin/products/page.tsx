@@ -27,7 +27,20 @@ type Category = {
   nama: string;
 };
 
-type SortMode = "normal" | "harga_desc" | "stok_desc" | "terjual_desc";
+type SortMode =
+  | "normal"
+  | "nama_desc"
+  | "nama_asc"
+  | "kategori_desc"
+  | "kategori_asc"
+  | "harga_desc"
+  | "harga_asc"
+  | "stok_desc"
+  | "stok_asc"
+  | "terjual_desc"
+  | "terjual_asc"
+  | "status_desc"
+  | "status_asc";
 type StatusFilter = "semua" | "aktif" | "nonaktif";
 
 const PRODUCT_BUCKET = "product-images";
@@ -49,8 +62,16 @@ function formatShortDate(date: string | null) {
   });
 }
 
-function getSortLabel(activeSort: SortMode, headerSort: SortMode) {
-  return activeSort === headerSort ? "v" : "-";
+function cycleSort(currentSort: SortMode, descSort: SortMode, ascSort: SortMode) {
+  if (currentSort === descSort) return ascSort;
+  if (currentSort === ascSort) return "normal";
+  return descSort;
+}
+
+function getSortLabel(activeSort: SortMode, descSort: SortMode, ascSort: SortMode) {
+  if (activeSort === descSort) return "v";
+  if (activeSort === ascSort) return "^";
+  return "-";
 }
 
 export default function AdminProductsPage() {
@@ -169,12 +190,52 @@ export default function AdminProductsPage() {
       });
     }
 
+    if (sortMode === "harga_asc") {
+      return [...filteredProducts].sort((first, second) => {
+        const secondPrice = getDiscountedPrice(Number(second.harga), second.harga_diskon);
+        const firstPrice = getDiscountedPrice(Number(first.harga), first.harga_diskon);
+        return firstPrice - secondPrice;
+      });
+    }
+
     if (sortMode === "stok_desc") {
       return [...filteredProducts].sort((first, second) => second.stok - first.stok);
     }
 
+    if (sortMode === "stok_asc") {
+      return [...filteredProducts].sort((first, second) => first.stok - second.stok);
+    }
+
     if (sortMode === "terjual_desc") {
       return [...filteredProducts].sort((first, second) => (second.total_dibeli || 0) - (first.total_dibeli || 0));
+    }
+
+    if (sortMode === "terjual_asc") {
+      return [...filteredProducts].sort((first, second) => (first.total_dibeli || 0) - (second.total_dibeli || 0));
+    }
+
+    if (sortMode === "nama_desc") {
+      return [...filteredProducts].sort((first, second) => second.nama_produk.localeCompare(first.nama_produk, "id"));
+    }
+
+    if (sortMode === "nama_asc") {
+      return [...filteredProducts].sort((first, second) => first.nama_produk.localeCompare(second.nama_produk, "id"));
+    }
+
+    if (sortMode === "kategori_desc") {
+      return [...filteredProducts].sort((first, second) => (second.kategori || "").localeCompare(first.kategori || "", "id"));
+    }
+
+    if (sortMode === "kategori_asc") {
+      return [...filteredProducts].sort((first, second) => (first.kategori || "").localeCompare(second.kategori || "", "id"));
+    }
+
+    if (sortMode === "status_desc") {
+      return [...filteredProducts].sort((first, second) => Number(second.aktif) - Number(first.aktif));
+    }
+
+    if (sortMode === "status_asc") {
+      return [...filteredProducts].sort((first, second) => Number(first.aktif) - Number(second.aktif));
     }
 
     return filteredProducts;
@@ -558,28 +619,64 @@ export default function AdminProductsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
+            <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3">No</th>
-                  <th className="px-5 py-3">Produk</th>
-                  <th className="px-5 py-3">Kategori</th>
-                  <th className="px-5 py-3">
-                    <button type="button" onClick={() => setSortMode((current) => (current === "harga_desc" ? "normal" : "harga_desc"))} className="font-bold">
-                      Harga {getSortLabel(sortMode, "harga_desc")}
+                  <th className="w-[380px] px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "nama_desc", "nama_asc"))}
+                      className="font-bold"
+                    >
+                      Produk {getSortLabel(sortMode, "nama_desc", "nama_asc")}
                     </button>
                   </th>
                   <th className="px-5 py-3">
-                    <button type="button" onClick={() => setSortMode((current) => (current === "stok_desc" ? "normal" : "stok_desc"))} className="font-bold">
-                      Stok {getSortLabel(sortMode, "stok_desc")}
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "kategori_desc", "kategori_asc"))}
+                      className="font-bold"
+                    >
+                      Kategori {getSortLabel(sortMode, "kategori_desc", "kategori_asc")}
                     </button>
                   </th>
                   <th className="px-5 py-3">
-                    <button type="button" onClick={() => setSortMode((current) => (current === "terjual_desc" ? "normal" : "terjual_desc"))} className="font-bold">
-                      Terjual {getSortLabel(sortMode, "terjual_desc")}
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "harga_desc", "harga_asc"))}
+                      className="font-bold"
+                    >
+                      Harga {getSortLabel(sortMode, "harga_desc", "harga_asc")}
                     </button>
                   </th>
-                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "stok_desc", "stok_asc"))}
+                      className="font-bold"
+                    >
+                      Stok {getSortLabel(sortMode, "stok_desc", "stok_asc")}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "terjual_desc", "terjual_asc"))}
+                      className="font-bold"
+                    >
+                      Terjual {getSortLabel(sortMode, "terjual_desc", "terjual_asc")}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSortMode((current) => cycleSort(current, "status_desc", "status_asc"))}
+                      className="font-bold"
+                    >
+                      Status {getSortLabel(sortMode, "status_desc", "status_asc")}
+                    </button>
+                  </th>
                   <th className="px-5 py-3">Aksi</th>
                 </tr>
               </thead>
@@ -587,7 +684,7 @@ export default function AdminProductsPage() {
                 {visibleProducts.map((product, index) => (
                   <tr key={product.id}>
                     <td className="px-5 py-4 font-bold text-slate-500">{index + 1}</td>
-                    <td className="px-5 py-4">
+                    <td className="w-[380px] px-5 py-4">
                       <div className="flex items-center gap-3">
                         {product.image_urls?.[0] ? (
                           <img src={product.image_urls[0]} alt={product.nama_produk} className="h-14 w-14 rounded-md object-cover" />
