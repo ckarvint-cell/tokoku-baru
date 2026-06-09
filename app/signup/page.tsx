@@ -229,7 +229,7 @@ export default function SignupPage() {
         {message && (
           <div className={`mt-4 rounded-md px-3 py-2 text-sm ${success ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
             <p>{message}</p>
-            {duplicateEmail && (
+            {(duplicateEmail || success) && (
               <button
                 type="button"
                 onClick={resendVerificationEmail}
