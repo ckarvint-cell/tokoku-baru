@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 type Product = {
@@ -25,6 +25,9 @@ type Category = {
   nama: string;
 };
 
+type SortMode = "normal" | "harga_desc" | "stok_desc";
+type StatusFilter = "semua" | "aktif" | "nonaktif";
+
 const PRODUCT_BUCKET = "product-images";
 
 function getDiscountedPrice(price: number, discountPercent: number | null) {
@@ -44,6 +47,9 @@ export default function AdminProductsPage() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState("");
+  const [searchName, setSearchName] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("normal");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
   const [form, setForm] = useState({
     namaProduk: "",
     kategori: "",
@@ -108,6 +114,32 @@ export default function AdminProductsPage() {
   function updateField(name: keyof typeof form, value: string | boolean) {
     setForm((current) => ({ ...current, [name]: value }));
   }
+
+  const visibleProducts = useMemo(() => {
+    const filteredProducts = products.filter((product) => {
+      const matchesName = product.nama_produk.toLowerCase().includes(searchName.toLowerCase().trim());
+      const matchesStatus =
+        statusFilter === "semua" ||
+        (statusFilter === "aktif" && product.aktif) ||
+        (statusFilter === "nonaktif" && !product.aktif);
+
+      return matchesName && matchesStatus;
+    });
+
+    if (sortMode === "harga_desc") {
+      return [...filteredProducts].sort((first, second) => {
+        const secondPrice = getDiscountedPrice(Number(second.harga), second.harga_diskon);
+        const firstPrice = getDiscountedPrice(Number(first.harga), first.harga_diskon);
+        return secondPrice - firstPrice;
+      });
+    }
+
+    if (sortMode === "stok_desc") {
+      return [...filteredProducts].sort((first, second) => second.stok - first.stok);
+    }
+
+    return filteredProducts;
+  }, [products, searchName, sortMode, statusFilter]);
 
   function handleFiles(selectedFiles: FileList | null) {
     const remainingSlots = Math.max(5 - existingImageUrls.length, 0);
@@ -281,10 +313,10 @@ export default function AdminProductsPage() {
     await loadProducts();
   }
 
-  async function toggleActive(product: Product) {
+  async function updateProductStatus(product: Product, active: boolean) {
     const { error } = await supabase
       .from("products")
-      .update({ aktif: !product.aktif })
+      .update({ aktif: active })
       .eq("id", product.id);
 
     if (error) {
@@ -464,24 +496,62 @@ export default function AdminProductsPage() {
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <h2 className="text-xl font-bold">Daftar Produk</h2>
-            <p className="mt-1 text-sm text-slate-500">{products.length} produk tersimpan</p>
+            <p className="mt-1 text-sm text-slate-500">{visibleProducts.length} dari {products.length} produk ditampilkan</p>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_170px_170px]">
+              <input
+                value={searchName}
+                onChange={(event) => setSearchName(event.target.value)}
+                placeholder="Cari nama produk..."
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+              />
+
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400"
+              >
+                <option value="semua">Semua status</option>
+                <option value="aktif">Aktif</option>
+                <option value="nonaktif">Nonaktif</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setSortMode((current) => (current === "harga_desc" ? "normal" : "harga_desc"))}
+                className={`rounded-md border px-3 py-2 text-sm font-bold ${sortMode === "harga_desc" ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+              >
+                Harga tertinggi
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortMode((current) => (current === "stok_desc" ? "normal" : "stok_desc"))}
+                className={`rounded-md border px-3 py-2 text-sm font-bold ${sortMode === "stok_desc" ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+              >
+                Stok tertinggi
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="px-5 py-3">No</th>
                   <th className="px-5 py-3">Produk</th>
                   <th className="px-5 py-3">Kategori</th>
                   <th className="px-5 py-3">Harga</th>
                   <th className="px-5 py-3">Stok</th>
+                  <th className="px-5 py-3">Tanggal</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {products.map((product) => (
+                {visibleProducts.map((product, index) => (
                   <tr key={product.id}>
+                    <td className="px-5 py-4 font-bold text-slate-500">{index + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         {product.image_urls?.[0] ? (
@@ -505,18 +575,27 @@ export default function AdminProductsPage() {
                       )}
                     </td>
                     <td className="px-5 py-4">{product.stok}</td>
+                    <td className="px-5 py-4 text-slate-500">
+                      {new Date(product.created_at).toLocaleDateString("id-ID", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
                     <td className="px-5 py-4">
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${product.aktif ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                        {product.aktif ? "Aktif" : "Nonaktif"}
-                      </span>
+                      <select
+                        value={product.aktif ? "aktif" : "nonaktif"}
+                        onChange={(event) => updateProductStatus(product, event.target.value === "aktif")}
+                        className={`rounded-md border px-3 py-2 text-xs font-bold outline-none ${product.aktif ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}
+                      >
+                        <option value="aktif">Aktif</option>
+                        <option value="nonaktif">Nonaktif</option>
+                      </select>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
                         <button type="button" onClick={() => startEdit(product)} className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
                           Edit
-                        </button>
-                        <button type="button" onClick={() => toggleActive(product)} className="rounded-md border border-slate-300 px-3 py-2 text-xs font-bold">
-                          {product.aktif ? "Nonaktifkan" : "Aktifkan"}
                         </button>
                         <button type="button" onClick={() => deleteProduct(product.id)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
                           Hapus
@@ -525,10 +604,10 @@ export default function AdminProductsPage() {
                     </td>
                   </tr>
                 ))}
-                {products.length === 0 && (
+                {visibleProducts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      Belum ada produk. Tambahkan produk pertama dari form.
+                    <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
+                      Tidak ada produk yang cocok dengan filter.
                     </td>
                   </tr>
                 )}
