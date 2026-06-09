@@ -19,6 +19,7 @@ type Product = {
   harga: number;
   harga_diskon: number | null;
   stok: number;
+  total_dibeli: number;
   image_urls: string[];
 };
 
@@ -98,7 +99,10 @@ function ProductCard({ product }: { product: Product }) {
             <h3 className="text-lg font-bold">{product.nama_produk}</h3>
             <p className="mt-1 text-sm text-slate-500">{product.kategori || "Tanpa kategori"}</p>
           </div>
-          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
+          <div className="grid gap-1 text-right">
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
+            <span className="text-xs font-medium text-slate-400">Terjual {product.total_dibeli || 0}</span>
+          </div>
         </div>
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
         <div className="mt-5 flex items-end justify-between gap-3">
@@ -168,7 +172,7 @@ export default function Home() {
     async function loadProducts() {
       const { data } = await supabase
         .from("products")
-        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,image_urls")
+        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,total_dibeli,image_urls")
         .eq("aktif", true)
         .order("created_at", { ascending: false });
 

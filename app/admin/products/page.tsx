@@ -15,6 +15,7 @@ type Product = {
   harga: number;
   harga_diskon: number | null;
   stok: number;
+  total_dibeli: number;
   aktif: boolean;
   image_urls: string[];
   created_at: string;
@@ -26,7 +27,7 @@ type Category = {
   nama: string;
 };
 
-type SortMode = "normal" | "harga_desc" | "stok_desc";
+type SortMode = "normal" | "harga_desc" | "stok_desc" | "terjual_desc";
 type StatusFilter = "semua" | "aktif" | "nonaktif";
 
 const PRODUCT_BUCKET = "product-images";
@@ -46,6 +47,10 @@ function formatShortDate(date: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getSortLabel(activeSort: SortMode, headerSort: SortMode) {
+  return activeSort === headerSort ? "v" : "-";
 }
 
 export default function AdminProductsPage() {
@@ -105,7 +110,7 @@ export default function AdminProductsPage() {
   async function loadProducts() {
     const { data, error } = await supabase
       .from("products")
-      .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at,updated_at")
+      .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,total_dibeli,aktif,image_urls,created_at,updated_at")
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -149,6 +154,10 @@ export default function AdminProductsPage() {
 
     if (sortMode === "stok_desc") {
       return [...filteredProducts].sort((first, second) => second.stok - first.stok);
+    }
+
+    if (sortMode === "terjual_desc") {
+      return [...filteredProducts].sort((first, second) => (second.total_dibeli || 0) - (first.total_dibeli || 0));
     }
 
     return filteredProducts;
@@ -511,7 +520,7 @@ export default function AdminProductsPage() {
             <h2 className="text-xl font-bold">Daftar Produk</h2>
             <p className="mt-1 text-sm text-slate-500">{visibleProducts.length} dari {products.length} produk ditampilkan</p>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_170px_170px]">
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px]">
               <input
                 value={searchName}
                 onChange={(event) => setSearchName(event.target.value)}
@@ -528,22 +537,6 @@ export default function AdminProductsPage() {
                 <option value="aktif">Aktif</option>
                 <option value="nonaktif">Nonaktif</option>
               </select>
-
-              <button
-                type="button"
-                onClick={() => setSortMode((current) => (current === "harga_desc" ? "normal" : "harga_desc"))}
-                className={`rounded-md border px-3 py-2 text-sm font-bold ${sortMode === "harga_desc" ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-700"}`}
-              >
-                Harga tertinggi
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSortMode((current) => (current === "stok_desc" ? "normal" : "stok_desc"))}
-                className={`rounded-md border px-3 py-2 text-sm font-bold ${sortMode === "stok_desc" ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-700"}`}
-              >
-                Stok tertinggi
-              </button>
             </div>
           </div>
 
@@ -554,8 +547,21 @@ export default function AdminProductsPage() {
                   <th className="px-5 py-3">No</th>
                   <th className="px-5 py-3">Produk</th>
                   <th className="px-5 py-3">Kategori</th>
-                  <th className="px-5 py-3">Harga</th>
-                  <th className="px-5 py-3">Stok</th>
+                  <th className="px-5 py-3">
+                    <button type="button" onClick={() => setSortMode((current) => (current === "harga_desc" ? "normal" : "harga_desc"))} className="font-bold">
+                      Harga {getSortLabel(sortMode, "harga_desc")}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3">
+                    <button type="button" onClick={() => setSortMode((current) => (current === "stok_desc" ? "normal" : "stok_desc"))} className="font-bold">
+                      Stok {getSortLabel(sortMode, "stok_desc")}
+                    </button>
+                  </th>
+                  <th className="px-5 py-3">
+                    <button type="button" onClick={() => setSortMode((current) => (current === "terjual_desc" ? "normal" : "terjual_desc"))} className="font-bold">
+                      Terjual {getSortLabel(sortMode, "terjual_desc")}
+                    </button>
+                  </th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Aksi</th>
                 </tr>
@@ -591,6 +597,7 @@ export default function AdminProductsPage() {
                       )}
                     </td>
                     <td className="px-5 py-4">{product.stok}</td>
+                    <td className="px-5 py-4 font-bold text-slate-700">{product.total_dibeli || 0}</td>
                     <td className="px-5 py-4">
                       <select
                         value={product.aktif ? "aktif" : "nonaktif"}
@@ -615,7 +622,7 @@ export default function AdminProductsPage() {
                 ))}
                 {visibleProducts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                    <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                       Tidak ada produk yang cocok dengan filter.
                     </td>
                   </tr>
