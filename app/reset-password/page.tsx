@@ -10,12 +10,21 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState("Memeriksa link reset password...");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
 
   useEffect(() => {
     async function prepareRecoverySession() {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
+      const urlError = url.searchParams.get("error_description") || url.searchParams.get("error");
+      const hashParams = new URLSearchParams(window.location.hash.replace("#", ""));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (urlError) {
+        setMessage(`Link reset password bermasalah: ${urlError}. Kirim ulang link reset dari halaman login.`);
+        return;
+      }
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -28,10 +37,24 @@ export default function ResetPasswordPage() {
         window.history.replaceState({}, "", "/reset-password");
       }
 
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          setMessage("Link reset password tidak valid atau sudah kedaluwarsa. Kirim ulang link reset dari halaman login.");
+          return;
+        }
+
+        window.history.replaceState({}, "", "/reset-password");
+      }
+
       const { data } = await supabase.auth.getSession();
 
       if (data.session) {
-        setHasSession(true);
+        setHasRecoverySession(true);
         setMessage("");
         return;
       }
@@ -54,6 +77,11 @@ export default function ResetPasswordPage() {
 
     if (password.length < 6) {
       setMessage("Password minimal 6 karakter.");
+      return;
+    }
+
+    if (!hasRecoverySession) {
+      setMessage("Session reset password belum aktif. Buka link reset langsung dari email terbaru, jangan ketik URL manual.");
       return;
     }
 
@@ -87,7 +115,7 @@ export default function ResetPasswordPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            disabled={!hasSession || loading}
+            disabled={loading}
             className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400 disabled:bg-slate-100"
           />
         </label>
@@ -99,7 +127,7 @@ export default function ResetPasswordPage() {
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             required
-            disabled={!hasSession || loading}
+            disabled={loading}
             className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400 disabled:bg-slate-100"
           />
         </label>
@@ -112,7 +140,7 @@ export default function ResetPasswordPage() {
 
         <button
           type="submit"
-          disabled={!hasSession || loading}
+          disabled={loading}
           className="mt-5 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
         >
           {loading ? "Menyimpan..." : "Simpan Password Baru"}
