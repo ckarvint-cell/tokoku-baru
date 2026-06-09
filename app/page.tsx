@@ -41,16 +41,6 @@ function ProductCard({ product }: { product: Product }) {
   const currentImage = images[imageIndex];
   const finalPrice = getDiscountedPrice(Number(product.harga), product.harga_diskon);
 
-  useEffect(() => {
-    if (images.length <= 1) return;
-
-    const timer = window.setInterval(() => {
-      setImageIndex((current) => (current + 1) % images.length);
-    }, 5000);
-
-    return () => window.clearInterval(timer);
-  }, [images.length]);
-
   function previousImage() {
     if (images.length <= 1) return;
     setImageIndex((current) => (current - 1 + images.length) % images.length);
