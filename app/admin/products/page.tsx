@@ -115,6 +115,20 @@ export default function AdminProductsPage() {
 
     if (!error && data) {
       setProducts(data as Product[]);
+      return;
+    }
+
+    if (error?.message.toLowerCase().includes("total_dibeli")) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("products")
+        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at,updated_at")
+        .order("created_at", { ascending: false });
+
+      if (!fallbackError && fallbackData) {
+        setProducts(fallbackData.map((product) => ({ ...product, total_dibeli: 0 })) as Product[]);
+        setSuccess(false);
+        setMessage("Kolom total_dibeli belum ada di Supabase. Jalankan SQL yang saya berikan agar data terjual tersimpan.");
+      }
     }
   }
 
