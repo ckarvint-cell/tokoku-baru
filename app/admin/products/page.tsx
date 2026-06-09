@@ -118,16 +118,19 @@ export default function AdminProductsPage() {
       return;
     }
 
-    if (error?.message.toLowerCase().includes("total_dibeli")) {
+    if (
+      error?.message.toLowerCase().includes("total_dibeli") ||
+      error?.message.toLowerCase().includes("updated_at")
+    ) {
       const { data: fallbackData, error: fallbackError } = await supabase
         .from("products")
-        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at,updated_at")
+        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,aktif,image_urls,created_at")
         .order("created_at", { ascending: false });
 
       if (!fallbackError && fallbackData) {
-        setProducts(fallbackData.map((product) => ({ ...product, total_dibeli: 0 })) as Product[]);
+        setProducts(fallbackData.map((product) => ({ ...product, total_dibeli: 0, updated_at: product.created_at })) as Product[]);
         setSuccess(false);
-        setMessage("Kolom total_dibeli belum ada di Supabase. Jalankan SQL yang saya berikan agar data terjual tersimpan.");
+        setMessage("Kolom total_dibeli atau updated_at belum lengkap di Supabase. Jalankan SQL migrasi agar data terjual dan tanggal diubah tersimpan.");
       }
     }
   }
