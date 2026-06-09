@@ -138,7 +138,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#fbf7f4] px-5 py-10 text-slate-950">
       <form onSubmit={handleLogin} className="w-full max-w-md rounded-lg border border-rose-100 bg-white p-6 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Tokoku</p>
+        <Link href="/" className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
+          Tokoku
+        </Link>
         <h1 className="mt-2 text-3xl font-bold">Login</h1>
         <p className="mt-2 text-sm text-slate-600">Masuk untuk belanja atau mengelola toko.</p>
 
