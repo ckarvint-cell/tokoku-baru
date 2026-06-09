@@ -42,6 +42,10 @@ type SortMode =
   | "status_desc"
   | "status_asc";
 type StatusFilter = "semua" | "aktif" | "nonaktif";
+type Toast = {
+  type: "success" | "error";
+  message: string;
+};
 
 const PRODUCT_BUCKET = "product-images";
 
@@ -62,16 +66,80 @@ function formatShortDate(date: string | null) {
   });
 }
 
-function cycleSort(currentSort: SortMode, descSort: SortMode, ascSort: SortMode) {
-  if (currentSort === descSort) return ascSort;
-  if (currentSort === ascSort) return "normal";
-  return descSort;
-}
-
 function getSortLabel(activeSort: SortMode, descSort: SortMode, ascSort: SortMode) {
   if (activeSort === descSort) return "v";
   if (activeSort === ascSort) return "^";
   return "-";
+}
+
+function SortButton({
+  label,
+  menuKey,
+  descSort,
+  ascSort,
+  sortMode,
+  openSortMenu,
+  setSortMode,
+  setOpenSortMenu,
+}: {
+  label: string;
+  menuKey: string;
+  descSort: SortMode;
+  ascSort: SortMode;
+  sortMode: SortMode;
+  openSortMenu: string | null;
+  setSortMode: (sortMode: SortMode) => void;
+  setOpenSortMenu: (menuKey: string | null | ((current: string | null) => string | null)) => void;
+}) {
+  const active = sortMode === descSort || sortMode === ascSort;
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpenSortMenu((current) => (current === menuKey ? null : menuKey))}
+        className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-bold ${active ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+      >
+        {label}
+        <span className="text-[10px]">{getSortLabel(sortMode, descSort, ascSort)}</span>
+      </button>
+
+      {openSortMenu === menuKey && (
+        <div className="absolute left-0 top-full z-20 mt-2 w-40 overflow-hidden rounded-md border border-slate-200 bg-white text-xs shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setSortMode("normal");
+              setOpenSortMenu(null);
+            }}
+            className="block w-full px-3 py-2 text-left hover:bg-slate-50"
+          >
+            Normal
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSortMode(descSort);
+              setOpenSortMenu(null);
+            }}
+            className="block w-full px-3 py-2 text-left hover:bg-slate-50"
+          >
+            Tertinggi / Z-A
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSortMode(ascSort);
+              setOpenSortMenu(null);
+            }}
+            className="block w-full px-3 py-2 text-left hover:bg-slate-50"
+          >
+            Terendah / A-Z
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminProductsPage() {
@@ -85,10 +153,13 @@ export default function AdminProductsPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+  const [pendingDeleteProduct, setPendingDeleteProduct] = useState<Product | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [searchName, setSearchName] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("normal");
+  const [openSortMenu, setOpenSortMenu] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
+  const [toast, setToast] = useState<Toast | null>(null);
   const [form, setForm] = useState({
     namaProduk: "",
     kategori: "",
@@ -152,6 +223,7 @@ export default function AdminProductsPage() {
         setProducts(fallbackData.map((product) => ({ ...product, total_dibeli: 0, updated_at: product.created_at })) as Product[]);
         setSuccess(false);
         setMessage("Kolom total_dibeli atau updated_at belum lengkap di Supabase. Jalankan SQL migrasi agar data terjual dan tanggal diubah tersimpan.");
+        showToast("error", "Kolom produk di Supabase belum lengkap.");
       }
     }
   }
@@ -169,6 +241,11 @@ export default function AdminProductsPage() {
 
   function updateField(name: keyof typeof form, value: string | boolean) {
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function showToast(type: Toast["type"], toastMessage: string) {
+    setToast({ type, message: toastMessage });
+    window.setTimeout(() => setToast(null), 2800);
   }
 
   const visibleProducts = useMemo(() => {
@@ -294,13 +371,14 @@ export default function AdminProductsPage() {
     const { error } = await supabase.from("product_categories").insert({ nama: cleanName });
 
     if (error) {
-      setMessage(error.code === "23505" ? "Kategori ini sudah ada." : error.message);
+      showToast("error", error.code === "23505" ? "Kategori ini sudah ada." : error.message);
       return;
     }
 
     setNewCategory("");
     setSuccess(true);
     setMessage("Kategori berhasil ditambahkan.");
+    showToast("success", "Kategori berhasil ditambahkan.");
     await loadCategories();
   }
 
@@ -313,6 +391,7 @@ export default function AdminProductsPage() {
     if (error) {
       setSuccess(false);
       setMessage(error.message);
+      showToast("error", error.message);
       return;
     }
 
@@ -322,6 +401,7 @@ export default function AdminProductsPage() {
 
     setSuccess(true);
     setMessage("Kategori berhasil dihapus.");
+    showToast("success", "Kategori berhasil dihapus.");
     await loadCategories();
   }
 
@@ -389,27 +469,32 @@ export default function AdminProductsPage() {
       resetForm();
       setSuccess(true);
       setMessage(wasEditing ? "Produk berhasil diperbarui." : "Produk berhasil ditambahkan.");
+      showToast("success", wasEditing ? "Produk telah berhasil diubah." : "Produk berhasil ditambahkan.");
       await loadProducts();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Gagal menyimpan produk.");
+      const errorMessage = error instanceof Error ? error.message : "Gagal menyimpan produk.";
+      setMessage(errorMessage);
+      showToast("error", errorMessage);
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteProduct(productId: string) {
-    const agree = window.confirm("Hapus produk ini?");
-    if (!agree) return;
+  async function confirmDeleteProduct() {
+    if (!pendingDeleteProduct) return;
 
-    const { error } = await supabase.from("products").delete().eq("id", productId);
+    const { error } = await supabase.from("products").delete().eq("id", pendingDeleteProduct.id);
     if (error) {
       setSuccess(false);
       setMessage(error.message);
+      showToast("error", error.message);
       return;
     }
 
+    setPendingDeleteProduct(null);
     setSuccess(true);
     setMessage("Produk berhasil dihapus.");
+    showToast("success", "Produk berhasil dihapus.");
     await loadProducts();
   }
 
@@ -422,9 +507,11 @@ export default function AdminProductsPage() {
     if (error) {
       setSuccess(false);
       setMessage(error.message);
+      showToast("error", error.message);
       return;
     }
 
+    showToast("success", active ? "Produk berhasil diaktifkan." : "Produk berhasil dinonaktifkan.");
     await loadProducts();
   }
 
@@ -438,6 +525,32 @@ export default function AdminProductsPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
+      {toast && (
+        <div className={`fixed right-5 top-5 z-50 w-[min(360px,calc(100vw-40px))] rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+          {toast.message}
+        </div>
+      )}
+
+      {pendingDeleteProduct && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-5">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Konfirmasi</p>
+            <h2 className="mt-2 text-xl font-bold">Hapus produk?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Produk <span className="font-bold text-slate-900">{pendingDeleteProduct.nama_produk}</span> akan dihapus dari daftar admin dan tidak tampil lagi di website customer.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingDeleteProduct(null)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold">
+                Batal
+              </button>
+              <button type="button" onClick={confirmDeleteProduct} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white">
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -619,72 +732,36 @@ export default function AdminProductsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] text-left text-sm">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-5 py-3">No</th>
-                  <th className="w-[380px] px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "nama_desc", "nama_asc"))}
-                      className="font-bold"
-                    >
-                      Produk {getSortLabel(sortMode, "nama_desc", "nama_asc")}
-                    </button>
+                  <th className="px-3 py-3">No</th>
+                  <th className="w-[300px] px-3 py-3">
+                    <SortButton label="Produk" menuKey="produk" descSort="nama_desc" ascSort="nama_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "kategori_desc", "kategori_asc"))}
-                      className="font-bold"
-                    >
-                      Kategori {getSortLabel(sortMode, "kategori_desc", "kategori_asc")}
-                    </button>
+                  <th className="px-3 py-3">
+                    <SortButton label="Kategori" menuKey="kategori" descSort="kategori_desc" ascSort="kategori_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "harga_desc", "harga_asc"))}
-                      className="font-bold"
-                    >
-                      Harga {getSortLabel(sortMode, "harga_desc", "harga_asc")}
-                    </button>
+                  <th className="px-3 py-3">
+                    <SortButton label="Harga" menuKey="harga" descSort="harga_desc" ascSort="harga_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "stok_desc", "stok_asc"))}
-                      className="font-bold"
-                    >
-                      Stok {getSortLabel(sortMode, "stok_desc", "stok_asc")}
-                    </button>
+                  <th className="px-3 py-3">
+                    <SortButton label="Stok" menuKey="stok" descSort="stok_desc" ascSort="stok_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "terjual_desc", "terjual_asc"))}
-                      className="font-bold"
-                    >
-                      Terjual {getSortLabel(sortMode, "terjual_desc", "terjual_asc")}
-                    </button>
+                  <th className="px-3 py-3">
+                    <SortButton label="Terjual" menuKey="terjual" descSort="terjual_desc" ascSort="terjual_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSortMode((current) => cycleSort(current, "status_desc", "status_asc"))}
-                      className="font-bold"
-                    >
-                      Status {getSortLabel(sortMode, "status_desc", "status_asc")}
-                    </button>
+                  <th className="px-3 py-3">
+                    <SortButton label="Status" menuKey="status" descSort="status_desc" ascSort="status_asc" sortMode={sortMode} openSortMenu={openSortMenu} setSortMode={setSortMode} setOpenSortMenu={setOpenSortMenu} />
                   </th>
-                  <th className="px-5 py-3">Aksi</th>
+                  <th className="px-3 py-3">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleProducts.map((product, index) => (
                   <tr key={product.id}>
-                    <td className="px-5 py-4 font-bold text-slate-500">{index + 1}</td>
-                    <td className="w-[380px] px-5 py-4">
+                    <td className="px-3 py-4 font-bold text-slate-500">{index + 1}</td>
+                    <td className="w-[300px] px-3 py-4">
                       <div className="flex items-center gap-3">
                         {product.image_urls?.[0] ? (
                           <img src={product.image_urls[0]} alt={product.nama_produk} className="h-14 w-14 rounded-md object-cover" />
@@ -701,8 +778,8 @@ export default function AdminProductsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4">{product.kategori || "-"}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">{product.kategori || "-"}</td>
+                    <td className="px-3 py-4">
                       <p className="font-bold"><span className="text-[0.5em] align-super">Rp</span> {getDiscountedPrice(Number(product.harga), product.harga_diskon).toLocaleString("id-ID")}</p>
                       {product.harga_diskon && (
                         <p className="text-xs text-slate-400">
@@ -710,9 +787,9 @@ export default function AdminProductsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-4">{product.stok}</td>
-                    <td className="px-5 py-4 font-bold text-slate-700">{product.total_dibeli || 0}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">{product.stok}</td>
+                    <td className="px-3 py-4 font-bold text-slate-700">{product.total_dibeli || 0}</td>
+                    <td className="px-3 py-4">
                       <select
                         value={product.aktif ? "aktif" : "nonaktif"}
                         onChange={(event) => updateProductStatus(product, event.target.value === "aktif")}
@@ -722,12 +799,12 @@ export default function AdminProductsPage() {
                         <option value="nonaktif">Nonaktif</option>
                       </select>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex gap-2">
                         <button type="button" onClick={() => startEdit(product)} className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
                           Edit
                         </button>
-                        <button type="button" onClick={() => deleteProduct(product.id)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
+                        <button type="button" onClick={() => setPendingDeleteProduct(product)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
                           Hapus
                         </button>
                       </div>
