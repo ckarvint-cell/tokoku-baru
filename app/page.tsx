@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -7,6 +9,17 @@ import { supabase } from "@/lib/supabase/client";
 type Profile = {
   full_name: string | null;
   role: "customer" | "admin" | "manager";
+};
+
+type Product = {
+  id: string;
+  nama_produk: string;
+  kategori: string | null;
+  deskripsi: string | null;
+  harga: number;
+  harga_diskon: number | null;
+  stok: number;
+  image_urls: string[];
 };
 
 function getGreeting() {
@@ -19,6 +32,7 @@ function getGreeting() {
 
 export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [now, setNow] = useState(new Date());
   const [notice, setNotice] = useState("");
 
@@ -59,6 +73,22 @@ export default function Home() {
     }
 
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    async function loadProducts() {
+      const { data } = await supabase
+        .from("products")
+        .select("id,nama_produk,kategori,deskripsi,harga,harga_diskon,stok,image_urls")
+        .eq("aktif", true)
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        setProducts(data as Product[]);
+      }
+    }
+
+    loadProducts();
   }, []);
 
   async function logout() {
@@ -144,6 +174,55 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        <section className="mt-10">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Koleksi</p>
+              <h2 className="mt-1 text-2xl font-bold">Produk Tersedia</h2>
+            </div>
+            <p className="text-sm text-slate-500">Produk dari dashboard admin akan tampil di sini.</p>
+          </div>
+
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <article key={product.id} className="overflow-hidden rounded-lg border border-rose-100 bg-white shadow-sm">
+                <div className="aspect-[4/3] bg-rose-50">
+                  {product.image_urls?.[0] ? (
+                    <img src={product.image_urls[0]} alt={product.nama_produk} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">Belum ada foto</div>
+                  )}
+                </div>
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold">{product.nama_produk}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{product.kategori || "Tanpa kategori"}</p>
+                    </div>
+                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
+                  <div className="mt-5 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-bold">Rp {Number(product.harga_diskon || product.harga).toLocaleString("id-ID")}</p>
+                      {product.harga_diskon && <p className="text-sm text-slate-400 line-through">Rp {Number(product.harga).toLocaleString("id-ID")}</p>}
+                    </div>
+                    <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
+                      Keranjang
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {products.length === 0 && (
+            <div className="mt-6 rounded-lg border border-dashed border-rose-200 bg-white px-5 py-10 text-center text-sm text-slate-500">
+              Belum ada produk aktif. Tambahkan produk dari halaman admin.
+            </div>
+          )}
+        </section>
       </section>
     </main>
   );
