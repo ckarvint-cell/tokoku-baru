@@ -13,7 +13,23 @@ export default function ResetPasswordPage() {
   const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    async function prepareRecoverySession() {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          setMessage("Link reset password tidak valid atau sudah kedaluwarsa. Kirim ulang link reset dari halaman login.");
+          return;
+        }
+
+        window.history.replaceState({}, "", "/reset-password");
+      }
+
+      const { data } = await supabase.auth.getSession();
+
       if (data.session) {
         setHasSession(true);
         setMessage("");
@@ -21,7 +37,9 @@ export default function ResetPasswordPage() {
       }
 
       setMessage("Buka halaman ini dari link reset password yang dikirim ke email.");
-    });
+    }
+
+    prepareRecoverySession();
   }, []);
 
   async function handleResetPassword(event: FormEvent<HTMLFormElement>) {
