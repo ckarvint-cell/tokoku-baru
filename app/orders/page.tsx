@@ -7,30 +7,60 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type OrderItem = {
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "pesanan_dikirim" | "ditolak";
+type Row = Record<string, unknown>;
+
+type OrderItem = Row & {
   id: string;
-  nama_produk: string;
-  harga: number;
-  qty: number;
-  note: string | null;
+  nama_produk?: string | null;
+  product_name?: string | null;
+  harga?: number | null;
+  price?: number | null;
+  qty?: number | null;
+  jumlah?: number | null;
+  subtotal?: number | null;
+  note?: string | null;
+  catatan?: string | null;
 };
 
-type Order = {
+type Order = Row & {
   id: string;
-  status: "Menunggu Ongkir" | "Menunggu Pembayaran" | "Pesanan Dikirim" | "Ditolak";
-  customer_name: string | null;
-  customer_phone: string | null;
-  shipping_address: string | null;
-  maps_url: string | null;
-  total_produk: number;
-  shipping_cost: number;
-  grand_total: number;
-  payment_proof_url: string | null;
-  payment_rejected_reason: string | null;
-  tracking_number: string | null;
-  courier_name: string | null;
-  courier_logo_url: string | null;
-  tracking_url: string | null;
+  status?: string | null;
+  status_pesanan?: string | null;
+  customer_name?: string | null;
+  nama_penerima?: string | null;
+  nama_customer?: string | null;
+  customer_phone?: string | null;
+  nomor_whatsapp?: string | null;
+  no_whatsapp?: string | null;
+  whatsapp?: string | null;
+  shipping_address?: string | null;
+  alamat_pengiriman?: string | null;
+  alamat_customer?: string | null;
+  alamat?: string | null;
+  maps_url?: string | null;
+  titik_gps?: string | null;
+  gps_url?: string | null;
+  google_maps?: string | null;
+  total_produk?: number | null;
+  total_harga?: number | null;
+  total?: number | null;
+  shipping_cost?: number | null;
+  ongkir?: number | null;
+  grand_total?: number | null;
+  total_bayar?: number | null;
+  payment_proof_url?: string | null;
+  bukti_pembayaran?: string | null;
+  payment_rejected_reason?: string | null;
+  alasan_penolakan?: string | null;
+  tracking_number?: string | null;
+  nomor_resi?: string | null;
+  courier_name?: string | null;
+  nama_kurir?: string | null;
+  courier_logo_url?: string | null;
+  logo_kurir?: string | null;
+  tracking_url?: string | null;
+  link_tracking?: string | null;
   created_at: string;
   order_items: OrderItem[];
 };
@@ -54,15 +84,114 @@ const defaultPaymentSettings: PaymentSettings = {
 const officialPaymentWarning =
   "Transfer sesuai Grand Total hanya ke rekening resmi di bawah ini. Pembayaran di luar rekening resmi toko tidak menjadi tanggung jawab kami. Setelah transfer berhasil, upload bukti pembayaran pada pesanan ini.";
 
-function formatCurrency(value: number | null | undefined) {
-  return `Rp ${Number(value || 0).toLocaleString("id-ID")}`;
+function asNumber(value: unknown) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
 }
 
-function statusClass(status: Order["status"]) {
-  if (status === "Menunggu Ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (status === "Menunggu Pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
-  if (status === "Pesanan Dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+function firstText(...values: unknown[]) {
+  const value = values.find((item) => typeof item === "string" && item.trim().length > 0);
+  return typeof value === "string" ? value : "";
+}
+
+function formatCurrency(value: number | null | undefined) {
+  return `Rp ${asNumber(value).toLocaleString("id-ID")}`;
+}
+
+function normalizeStatus(order: Order): Status {
+  const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
+  if (raw.includes("ongkir")) return "menunggu_ongkir";
+  if (raw.includes("pembayaran") || raw === "pending" || raw === "baru") return "menunggu_pembayaran";
+  if (raw.includes("kirim") || raw.includes("dikirim")) return "pesanan_dikirim";
+  if (raw.includes("tolak")) return "ditolak";
+  return "menunggu_ongkir";
+}
+
+function statusLabel(status: Status) {
+  return status.replaceAll("_", " ");
+}
+
+function statusClass(status: Status) {
+  if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
+  if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
+}
+
+function itemName(item: OrderItem) {
+  return firstText(item.nama_produk, item.product_name, item.name) || "Produk";
+}
+
+function itemQty(item: OrderItem) {
+  return asNumber(item.qty ?? item.jumlah) || 1;
+}
+
+function itemPrice(item: OrderItem) {
+  const qty = itemQty(item);
+  const subtotal = asNumber(item.subtotal);
+  if (subtotal > 0 && qty > 0) return subtotal / qty;
+  return asNumber(item.harga ?? item.price);
+}
+
+function itemSubtotal(item: OrderItem) {
+  const subtotal = asNumber(item.subtotal);
+  return subtotal > 0 ? subtotal : itemPrice(item) * itemQty(item);
+}
+
+function orderItemsTotal(order: Order) {
+  return (order.order_items || []).reduce((total, item) => total + itemSubtotal(item), 0);
+}
+
+function orderTotalProduk(order: Order) {
+  return asNumber(order.total_produk ?? order.total_harga ?? order.total) || orderItemsTotal(order);
+}
+
+function orderOngkir(order: Order) {
+  return asNumber(order.shipping_cost ?? order.ongkir);
+}
+
+function orderGrandTotal(order: Order) {
+  return asNumber(order.grand_total ?? order.total_bayar) || orderTotalProduk(order) + orderOngkir(order);
+}
+
+function orderName(order: Order) {
+  return firstText(order.customer_name, order.nama_penerima, order.nama_customer);
+}
+
+function orderPhone(order: Order) {
+  return firstText(order.customer_phone, order.nomor_whatsapp, order.no_whatsapp, order.whatsapp, order.telepon);
+}
+
+function orderAddress(order: Order) {
+  return firstText(order.shipping_address, order.alamat_pengiriman, order.alamat_customer, order.alamat);
+}
+
+function orderMaps(order: Order) {
+  return firstText(order.maps_url, order.titik_gps, order.gps_url, order.google_maps);
+}
+
+function orderProof(order: Order) {
+  return firstText(order.payment_proof_url, order.bukti_pembayaran);
+}
+
+function trackingNumber(order: Order) {
+  return firstText(order.tracking_number, order.nomor_resi);
+}
+
+function courierName(order: Order) {
+  return firstText(order.courier_name, order.nama_kurir);
+}
+
+function courierLogo(order: Order) {
+  return firstText(order.courier_logo_url, order.logo_kurir);
+}
+
+function trackingUrl(order: Order) {
+  return firstText(order.tracking_url, order.link_tracking);
+}
+
+function getMissingColumn(errorMessage: string | undefined) {
+  return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
 export default function OrdersPage() {
@@ -87,35 +216,40 @@ export default function OrdersPage() {
       setUserId(user.id);
 
       const [ordersResult, paymentResult] = await Promise.all([
-        supabase
-          .from("orders")
-          .select("*, order_items(*)")
-          .eq("customer_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("payment_settings")
-          .select("bank_name,account_number,account_holder,payment_logo_url,payment_note")
-          .eq("id", true)
-          .maybeSingle(),
+        supabase.from("orders").select("*, order_items(*)").eq("customer_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
       ]);
 
       if (ordersResult.error?.message.includes("customer_id")) {
-        const fallbackOrders = await supabase
-          .from("orders")
-          .select("*, order_items(*)")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
+        const fallbackOrders = await supabase.from("orders").select("*, order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
         if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
       } else if (ordersResult.data) {
         setOrders(ordersResult.data as Order[]);
       }
+
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       setLoading(false);
     }
 
     loadData();
   }, [router]);
+
+  async function updateOrder(orderId: string, payload: Row) {
+    const adaptivePayload = { ...payload };
+    let error: { message: string } | null = null;
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+      error = result.error;
+
+      const missingColumn = getMissingColumn(error?.message);
+      if (!missingColumn) break;
+
+      delete adaptivePayload[missingColumn];
+    }
+
+    return error;
+  }
 
   async function uploadPaymentProof(order: Order, file: File | undefined) {
     if (!file || !userId || uploadingId) return;
@@ -125,9 +259,7 @@ export default function OrdersPage() {
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
     const path = `${userId}/${order.id}-${crypto.randomUUID()}-${safeName}`;
-    const { error: uploadError } = await supabase.storage.from("payment-proofs").upload(path, file, {
-      upsert: false,
-    });
+    const { error: uploadError } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: false });
 
     if (uploadError) {
       setMessage(uploadError.message);
@@ -136,10 +268,22 @@ export default function OrdersPage() {
     }
 
     const { data } = supabase.storage.from("payment-proofs").getPublicUrl(path);
-    const { error: updateError } = await supabase.rpc("customer_upload_payment_proof", {
+    let updateError = null as { message: string } | null;
+
+    const rpcResult = await supabase.rpc("customer_upload_payment_proof", {
       order_id_to_update: order.id,
       proof_url: data.publicUrl,
     });
+
+    updateError = rpcResult.error;
+
+    if (updateError) {
+      updateError = await updateOrder(order.id, {
+        payment_proof_url: data.publicUrl,
+        bukti_pembayaran: data.publicUrl,
+        updated_at: new Date().toISOString(),
+      });
+    }
 
     if (updateError) {
       setMessage(updateError.message);
@@ -148,14 +292,14 @@ export default function OrdersPage() {
     }
 
     setOrders((current) =>
-      current.map((item) => (item.id === order.id ? { ...item, payment_proof_url: data.publicUrl } : item)),
+      current.map((item) => (item.id === order.id ? { ...item, payment_proof_url: data.publicUrl, bukti_pembayaran: data.publicUrl } : item)),
     );
     setMessage("Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
     setUploadingId("");
   }
 
-  function copyTrackingNumber(trackingNumber: string) {
-    navigator.clipboard.writeText(trackingNumber);
+  function copyTrackingNumber(resi: string) {
+    navigator.clipboard.writeText(resi);
     setMessage("Nomor resi berhasil dicopy.");
   }
 
@@ -191,145 +335,153 @@ export default function OrdersPage() {
         )}
 
         <div className="grid gap-5">
-          {orders.map((order) => (
-            <article key={order.id} className="rounded-lg border border-rose-100 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-rose-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">
-                    {new Date(order.created_at).toLocaleString("id-ID")}
-                  </p>
-                  <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
-                </div>
-                <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(order.status)}`}>
-                  {order.status}
-                </span>
-              </div>
+          {orders.map((order) => {
+            const status = normalizeStatus(order);
+            const proof = orderProof(order);
+            const totalProduk = orderTotalProduk(order);
+            const ongkir = orderOngkir(order);
+            const grandTotal = orderGrandTotal(order);
+            const resi = trackingNumber(order);
+            const logo = courierLogo(order);
 
-              <div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
-                <div className="grid gap-4">
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <h3 className="font-bold">Detail Produk</h3>
-                    <div className="mt-3 grid gap-2">
-                      {order.order_items.map((item) => (
-                        <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <div className="flex justify-between gap-3">
-                            <span>{item.nama_produk} x {item.qty}</span>
-                            <strong>{formatCurrency(Number(item.harga) * item.qty)}</strong>
+            return (
+              <article key={order.id} className="rounded-lg border border-rose-100 bg-white shadow-sm">
+                <div className="flex flex-col gap-3 border-b border-rose-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">
+                      {new Date(order.created_at).toLocaleString("id-ID")}
+                    </p>
+                    <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                  </div>
+                  <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
+                    {statusLabel(status)}
+                  </span>
+                </div>
+
+                <div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
+                  <div className="grid gap-4">
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <h3 className="font-bold">Detail Produk</h3>
+                      <div className="mt-3 grid gap-2">
+                        {order.order_items.map((item) => (
+                          <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                            <div className="flex justify-between gap-3">
+                              <span>{itemName(item)} x {itemQty(item)}</span>
+                              <strong>{formatCurrency(itemSubtotal(item))}</strong>
+                            </div>
+                            {firstText(item.note, item.catatan) && <p className="mt-1 text-xs text-slate-500">Catatan: {firstText(item.note, item.catatan)}</p>}
                           </div>
-                          {item.note && <p className="mt-1 text-xs text-slate-500">Catatan: {item.note}</p>}
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
+                      <h3 className="mb-2 font-bold text-slate-950">Penerima</h3>
+                      <p>Nama: {orderName(order) || "-"}</p>
+                      <p>WhatsApp: {orderPhone(order) || "-"}</p>
+                      <p>Alamat: {orderAddress(order) || "-"}</p>
+                      {orderMaps(order) && (
+                        <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
+                          Buka titik Google Maps
+                        </a>
+                      )}
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
-                    <h3 className="mb-2 font-bold text-slate-950">Penerima</h3>
-                    <p>{order.customer_name || "-"}</p>
-                    <p>{order.customer_phone || "-"}</p>
-                    <p>{order.shipping_address || "-"}</p>
-                    {order.maps_url && (
-                      <a href={order.maps_url} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
-                        Buka titik Google Maps
-                      </a>
+                  <div className="grid content-start gap-4">
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <h3 className="font-bold">Ringkasan Pembayaran</h3>
+                      <div className="mt-3 grid gap-2 text-sm">
+                        <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
+                        <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
+                        <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
+                          <span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {status === "menunggu_ongkir" && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                        Admin sedang menentukan ongkir. Upload bukti pembayaran akan aktif setelah ongkir disimpan.
+                      </div>
+                    )}
+
+                    {status === "menunggu_pembayaran" && (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                        <div className="flex items-start gap-3">
+                          {paymentSettings.payment_logo_url && (
+                            <img src={paymentSettings.payment_logo_url} alt={paymentSettings.bank_name} className="h-12 w-16 rounded-md bg-white object-contain p-2" />
+                          )}
+                          <div className="text-sm leading-6">
+                            <h3 className="font-bold text-slate-950">{paymentSettings.bank_name || "Rekening belum diatur"}</h3>
+                            <p>No. Rekening: <strong>{paymentSettings.account_number || "-"}</strong></p>
+                            <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
+                          </div>
+                        </div>
+                        <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
+                          {paymentSettings.payment_note || officialPaymentWarning}
+                        </p>
+                        {proof ? (
+                          <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-bold text-sky-700">
+                            Bukti pembayaran sudah dikirim
+                          </a>
+                        ) : (
+                          <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
+                            Upload Bukti Pembayaran
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={uploadingId === order.id}
+                              onChange={(event) => uploadPaymentProof(order, event.target.files?.[0])}
+                              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    )}
+
+                    {status === "ditolak" && (
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+                        <strong>Pembayaran ditolak.</strong>
+                        <p>{firstText(order.payment_rejected_reason, order.alasan_penolakan) || "Admin belum memberi alasan."}</p>
+                      </div>
+                    )}
+
+                    {status === "pesanan_dikirim" && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-start gap-3">
+                          {logo && <img src={logo} alt={courierName(order) || "Logo kurir"} className="h-12 w-16 rounded-md bg-white object-contain p-2" />}
+                          <div>
+                            <h3 className="font-bold text-emerald-950">{courierName(order) || "Kurir"}</h3>
+                            <p className="text-sm text-emerald-800">Resi: <strong>{resi || "-"}</strong></p>
+                          </div>
+                        </div>
+                        {resi && (
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(resi)}`}
+                            alt="QR Code Resi"
+                            className="mt-4 h-32 w-32 rounded-md bg-white p-2"
+                          />
+                        )}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {resi && (
+                            <button onClick={() => copyTrackingNumber(resi)} className="rounded-md bg-white px-4 py-2 text-sm font-bold text-emerald-700">
+                              Copy Resi
+                            </button>
+                          )}
+                          {trackingUrl(order) && (
+                            <a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
+                              Cek Resi
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
-
-                <div className="grid content-start gap-4">
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <h3 className="font-bold">Ringkasan Pembayaran</h3>
-                    <div className="mt-3 grid gap-2 text-sm">
-                      <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(order.total_produk)}</strong></div>
-                      <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(order.shipping_cost)}</strong></div>
-                      <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
-                        <span>Grand Total</span><strong>{formatCurrency(order.grand_total)}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {order.status === "Menunggu Ongkir" && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                      Admin sedang menentukan ongkir. Upload bukti pembayaran akan aktif setelah ongkir disimpan.
-                    </div>
-                  )}
-
-                  {order.status === "Menunggu Pembayaran" && (
-                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
-                      <div className="flex items-start gap-3">
-                        {paymentSettings.payment_logo_url && (
-                          <img src={paymentSettings.payment_logo_url} alt={paymentSettings.bank_name} className="h-12 w-16 rounded-md bg-white object-contain p-2" />
-                        )}
-                        <div className="text-sm leading-6">
-                          <h3 className="font-bold text-slate-950">{paymentSettings.bank_name || "Rekening belum diatur"}</h3>
-                          <p>No. Rekening: <strong>{paymentSettings.account_number || "-"}</strong></p>
-                          <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
-                        </div>
-                      </div>
-                      <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
-                        {paymentSettings.payment_note || officialPaymentWarning}
-                      </p>
-                      {order.payment_proof_url ? (
-                        <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-bold text-sky-700">
-                          Lihat bukti pembayaran
-                        </a>
-                      ) : (
-                        <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
-                          Upload Bukti Pembayaran
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={uploadingId === order.id}
-                            onChange={(event) => uploadPaymentProof(order, event.target.files?.[0])}
-                            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
-
-                  {order.status === "Ditolak" && (
-                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
-                      <strong>Pembayaran ditolak.</strong>
-                      <p>{order.payment_rejected_reason || "Admin belum memberi alasan."}</p>
-                    </div>
-                  )}
-
-                  {order.status === "Pesanan Dikirim" && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                      <div className="flex items-start gap-3">
-                        {order.courier_logo_url && (
-                          <img src={order.courier_logo_url} alt={order.courier_name || "Logo kurir"} className="h-12 w-16 rounded-md bg-white object-contain p-2" />
-                        )}
-                        <div>
-                          <h3 className="font-bold text-emerald-950">{order.courier_name || "Kurir"}</h3>
-                          <p className="text-sm text-emerald-800">Resi: <strong>{order.tracking_number || "-"}</strong></p>
-                        </div>
-                      </div>
-                      {order.tracking_number && (
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(order.tracking_number)}`}
-                          alt="QR Code Resi"
-                          className="mt-4 h-32 w-32 rounded-md bg-white p-2"
-                        />
-                      )}
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {order.tracking_number && (
-                          <button onClick={() => copyTrackingNumber(order.tracking_number || "")} className="rounded-md bg-white px-4 py-2 text-sm font-bold text-emerald-700">
-                            Copy Resi
-                          </button>
-                        )}
-                        {order.tracking_url && (
-                          <a href={order.tracking_url} target="_blank" rel="noreferrer" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                            Cek Resi
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
 
         {orders.length === 0 && (

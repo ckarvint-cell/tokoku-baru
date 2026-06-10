@@ -1,44 +1,76 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type Status = "Menunggu Ongkir" | "Menunggu Pembayaran" | "Pesanan Dikirim" | "Ditolak";
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "pesanan_dikirim" | "ditolak";
+type FilterStatus = Status | "semua";
 
 type Profile = {
   email: string;
   role: "customer" | "admin" | "manager";
 };
 
-type OrderItem = {
+type Row = Record<string, unknown>;
+
+type OrderItem = Row & {
   id: string;
-  nama_produk: string;
-  harga: number;
-  qty: number;
-  note: string | null;
+  nama_produk?: string | null;
+  product_name?: string | null;
+  harga?: number | null;
+  price?: number | null;
+  qty?: number | null;
+  jumlah?: number | null;
+  subtotal?: number | null;
+  note?: string | null;
+  catatan?: string | null;
 };
 
-type Order = {
+type Order = Row & {
   id: string;
-  status: Status;
-  customer_name: string | null;
-  customer_phone: string | null;
-  shipping_address: string | null;
-  maps_url: string | null;
-  total_produk: number;
-  shipping_cost: number;
-  grand_total: number;
-  payment_proof_url: string | null;
-  payment_rejected_reason: string | null;
-  tracking_number: string | null;
-  courier_name: string | null;
-  courier_logo_url: string | null;
-  tracking_url: string | null;
-  paid_at: string | null;
-  shipped_at: string | null;
-  updated_at: string | null;
+  status?: string | null;
+  status_pesanan?: string | null;
+  customer_name?: string | null;
+  nama_penerima?: string | null;
+  nama_customer?: string | null;
+  customer_phone?: string | null;
+  nomor_whatsapp?: string | null;
+  no_whatsapp?: string | null;
+  whatsapp?: string | null;
+  shipping_address?: string | null;
+  alamat_pengiriman?: string | null;
+  alamat_customer?: string | null;
+  alamat?: string | null;
+  maps_url?: string | null;
+  titik_gps?: string | null;
+  gps_url?: string | null;
+  google_maps?: string | null;
+  total_produk?: number | null;
+  total_harga?: number | null;
+  total?: number | null;
+  shipping_cost?: number | null;
+  ongkir?: number | null;
+  grand_total?: number | null;
+  total_bayar?: number | null;
+  payment_proof_url?: string | null;
+  bukti_pembayaran?: string | null;
+  payment_rejected_reason?: string | null;
+  alasan_penolakan?: string | null;
+  tracking_number?: string | null;
+  nomor_resi?: string | null;
+  courier_name?: string | null;
+  nama_kurir?: string | null;
+  courier_logo_url?: string | null;
+  logo_kurir?: string | null;
+  tracking_url?: string | null;
+  link_tracking?: string | null;
+  paid_at?: string | null;
+  shipped_at?: string | null;
+  updated_at?: string | null;
   created_at: string;
   order_items: OrderItem[];
 };
@@ -52,27 +84,126 @@ type Draft = {
   trackingUrl: string;
 };
 
-const statuses: Array<Status | "Semua"> = ["Semua", "Menunggu Ongkir", "Menunggu Pembayaran", "Pesanan Dikirim", "Ditolak"];
+const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "pesanan_dikirim", "ditolak"];
+
+function asNumber(value: unknown) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function firstText(...values: unknown[]) {
+  const value = values.find((item) => typeof item === "string" && item.trim().length > 0);
+  return typeof value === "string" ? value : "";
+}
 
 function formatCurrency(value: number | null | undefined) {
-  return `Rp ${Number(value || 0).toLocaleString("id-ID")}`;
+  return `Rp ${asNumber(value).toLocaleString("id-ID")}`;
+}
+
+function normalizeStatus(order: Order): Status {
+  const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
+  if (raw.includes("ongkir")) return "menunggu_ongkir";
+  if (raw.includes("pembayaran") || raw === "pending" || raw === "baru") return "menunggu_pembayaran";
+  if (raw.includes("kirim") || raw.includes("dikirim")) return "pesanan_dikirim";
+  if (raw.includes("tolak")) return "ditolak";
+  return "menunggu_ongkir";
+}
+
+function statusLabel(status: Status) {
+  return status.replaceAll("_", " ");
 }
 
 function statusClass(status: Status) {
-  if (status === "Menunggu Ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (status === "Menunggu Pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
-  if (status === "Pesanan Dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
+  if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
+}
+
+function itemName(item: OrderItem) {
+  return firstText(item.nama_produk, item.product_name, item.name) || "Produk";
+}
+
+function itemQty(item: OrderItem) {
+  return asNumber(item.qty ?? item.jumlah) || 1;
+}
+
+function itemPrice(item: OrderItem) {
+  const qty = itemQty(item);
+  const subtotal = asNumber(item.subtotal);
+  if (subtotal > 0 && qty > 0) return subtotal / qty;
+  return asNumber(item.harga ?? item.price);
+}
+
+function itemSubtotal(item: OrderItem) {
+  const subtotal = asNumber(item.subtotal);
+  return subtotal > 0 ? subtotal : itemPrice(item) * itemQty(item);
+}
+
+function orderItemsTotal(order: Order) {
+  return (order.order_items || []).reduce((total, item) => total + itemSubtotal(item), 0);
+}
+
+function orderTotalProduk(order: Order) {
+  return asNumber(order.total_produk ?? order.total_harga ?? order.total) || orderItemsTotal(order);
+}
+
+function orderOngkir(order: Order) {
+  return asNumber(order.shipping_cost ?? order.ongkir);
+}
+
+function orderGrandTotal(order: Order) {
+  return asNumber(order.grand_total ?? order.total_bayar) || orderTotalProduk(order) + orderOngkir(order);
+}
+
+function orderName(order: Order) {
+  return firstText(order.customer_name, order.nama_penerima, order.nama_customer);
+}
+
+function orderPhone(order: Order) {
+  return firstText(order.customer_phone, order.nomor_whatsapp, order.no_whatsapp, order.whatsapp, order.telepon);
+}
+
+function orderAddress(order: Order) {
+  return firstText(order.shipping_address, order.alamat_pengiriman, order.alamat_customer, order.alamat);
+}
+
+function orderMaps(order: Order) {
+  return firstText(order.maps_url, order.titik_gps, order.gps_url, order.google_maps);
+}
+
+function orderProof(order: Order) {
+  return firstText(order.payment_proof_url, order.bukti_pembayaran);
+}
+
+function trackingNumber(order: Order) {
+  return firstText(order.tracking_number, order.nomor_resi);
+}
+
+function courierName(order: Order) {
+  return firstText(order.courier_name, order.nama_kurir);
+}
+
+function courierLogo(order: Order) {
+  return firstText(order.courier_logo_url, order.logo_kurir);
+}
+
+function trackingUrl(order: Order) {
+  return firstText(order.tracking_url, order.link_tracking);
+}
+
+function getMissingColumn(errorMessage: string | undefined) {
+  return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
 function makeDraft(order: Order): Draft {
   return {
-    shippingCost: String(order.shipping_cost || ""),
-    courierName: order.courier_name || "",
-    rejectReason: order.payment_rejected_reason || "",
-    trackingNumber: order.tracking_number || "",
-    courierLogoUrl: order.courier_logo_url || "",
-    trackingUrl: order.tracking_url || "",
+    shippingCost: String(orderOngkir(order) || ""),
+    courierName: courierName(order),
+    rejectReason: firstText(order.payment_rejected_reason, order.alasan_penolakan),
+    trackingNumber: trackingNumber(order),
+    courierLogoUrl: courierLogo(order),
+    trackingUrl: trackingUrl(order),
   };
 }
 
@@ -81,7 +212,7 @@ export default function AdminOrdersPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [filter, setFilter] = useState<Status | "Semua">("Semua");
+  const [filter, setFilter] = useState<FilterStatus>("semua");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
@@ -96,11 +227,7 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("email, role")
-        .eq("id", user.id)
-        .single();
+      const { data: profileData } = await supabase.from("profiles").select("email, role").eq("id", user.id).single();
 
       if (!profileData || !["admin", "manager"].includes(profileData.role)) {
         router.push("/");
@@ -116,10 +243,7 @@ export default function AdminOrdersPage() {
   }, [router]);
 
   async function loadOrders() {
-    const { data } = await supabase
-      .from("orders")
-      .select("*, order_items(*)")
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
 
     if (data) {
       const nextOrders = data as Order[];
@@ -138,11 +262,22 @@ export default function AdminOrdersPage() {
     }));
   }
 
-  async function updateOrder(orderId: string, payload: Partial<Order>, successMessage: string) {
+  async function updateOrder(orderId: string, payload: Row, successMessage: string) {
     setSavingId(orderId);
     setMessage("");
 
-    const { error } = await supabase.from("orders").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", orderId);
+    const adaptivePayload = { ...payload };
+    let error: { message: string } | null = null;
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+      error = result.error;
+
+      const missingColumn = getMissingColumn(error?.message);
+      if (!missingColumn) break;
+
+      delete adaptivePayload[missingColumn];
+    }
 
     if (error) {
       setMessage(error.message);
@@ -158,6 +293,7 @@ export default function AdminOrdersPage() {
   async function saveShipping(order: Order) {
     const draft = drafts[order.id];
     const shippingCost = Number(draft?.shippingCost || 0);
+    const totalProduk = orderTotalProduk(order);
 
     if (shippingCost < 0) {
       setMessage("Ongkir tidak boleh minus.");
@@ -168,41 +304,75 @@ export default function AdminOrdersPage() {
       order.id,
       {
         shipping_cost: shippingCost,
-        grand_total: Number(order.total_produk || 0) + shippingCost,
+        ongkir: shippingCost,
+        total_produk: totalProduk,
+        total_harga: totalProduk,
+        total: totalProduk,
+        grand_total: totalProduk + shippingCost,
+        total_bayar: totalProduk + shippingCost,
         courier_name: draft?.courierName || null,
-        status: "Menunggu Pembayaran",
+        nama_kurir: draft?.courierName || null,
+        status: "menunggu_pembayaran",
+        status_pesanan: "menunggu_pembayaran",
+        updated_at: new Date().toISOString(),
       },
-      "Ongkir berhasil disimpan. Status berubah menjadi Menunggu Pembayaran.",
+      "Ongkir berhasil disimpan.",
     );
   }
 
   async function rejectPayment(order: Order) {
     const draft = drafts[order.id];
 
-    if (!draft?.rejectReason.trim()) {
-      setMessage("Isi alasan penolakan terlebih dahulu.");
+    await updateOrder(
+      order.id,
+      {
+        status: "ditolak",
+        status_pesanan: "ditolak",
+        payment_rejected_reason: draft?.rejectReason?.trim() || "Pesanan ditolak admin.",
+        alasan_penolakan: draft?.rejectReason?.trim() || "Pesanan ditolak admin.",
+        updated_at: new Date().toISOString(),
+      },
+      "Pesanan berhasil ditolak.",
+    );
+  }
+
+  async function approvePayment(order: Order) {
+    if (!orderProof(order)) {
+      setMessage("Customer harus upload bukti pembayaran sebelum pesanan bisa di-approve.");
       return;
     }
 
     await updateOrder(
       order.id,
       {
-        status: "Ditolak",
-        payment_rejected_reason: draft.rejectReason.trim(),
+        status: "pesanan_dikirim",
+        status_pesanan: "pesanan_dikirim",
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
-      "Pembayaran ditolak dan alasan sudah tersimpan.",
+      "Pembayaran berhasil di-approve.",
     );
   }
 
-  async function approvePayment(order: Order) {
-    await updateOrder(
-      order.id,
-      {
-        status: "Pesanan Dikirim",
-        paid_at: new Date().toISOString(),
-      },
-      "Pembayaran disetujui. Status berubah menjadi Pesanan Dikirim.",
-    );
+  async function uploadCourierLogo(order: Order, file: File | undefined) {
+    if (!file) return;
+
+    setSavingId(order.id);
+    setMessage("");
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `courier-logos/${order.id}-${crypto.randomUUID()}-${safeName}`;
+    const { error } = await supabase.storage.from("payment-assets").upload(path, file, { upsert: false });
+
+    if (error) {
+      setMessage(error.message);
+      setSavingId("");
+      return;
+    }
+
+    const { data } = supabase.storage.from("payment-assets").getPublicUrl(path);
+    updateDraft(order.id, "courierLogoUrl", data.publicUrl);
+    setSavingId("");
   }
 
   async function saveTracking(order: Order) {
@@ -211,27 +381,53 @@ export default function AdminOrdersPage() {
     await updateOrder(
       order.id,
       {
-        status: "Pesanan Dikirim",
+        status: "pesanan_dikirim",
+        status_pesanan: "pesanan_dikirim",
         tracking_number: draft?.trackingNumber || null,
+        nomor_resi: draft?.trackingNumber || null,
         courier_name: draft?.courierName || null,
+        nama_kurir: draft?.courierName || null,
         courier_logo_url: draft?.courierLogoUrl || null,
+        logo_kurir: draft?.courierLogoUrl || null,
         tracking_url: draft?.trackingUrl || null,
+        link_tracking: draft?.trackingUrl || null,
         shipped_at: draft?.trackingNumber ? new Date().toISOString() : order.shipped_at,
+        updated_at: new Date().toISOString(),
       },
       "Data pengiriman berhasil disimpan.",
     );
   }
 
+  async function deleteOrder(order: Order) {
+    if (!window.confirm("Yakin ingin menghapus pesanan ini?")) return;
+
+    setSavingId(order.id);
+    setMessage("");
+
+    await supabase.from("order_items").delete().eq("order_id", order.id);
+    const { error } = await supabase.from("orders").delete().eq("id", order.id);
+
+    if (error) {
+      setMessage(error.message);
+      setSavingId("");
+      return;
+    }
+
+    await loadOrders();
+    setMessage("Pesanan berhasil dihapus.");
+    setSavingId("");
+  }
+
   const filteredOrders = useMemo(
-    () => (filter === "Semua" ? orders : orders.filter((order) => order.status === filter)),
+    () => (filter === "semua" ? orders : orders.filter((order) => normalizeStatus(order) === filter)),
     [orders, filter],
   );
 
   const counts = useMemo(
     () => ({
-      newOrders: orders.filter((order) => order.status === "Menunggu Ongkir").length,
-      uploadedProofs: orders.filter((order) => order.status === "Menunggu Pembayaran" && order.payment_proof_url).length,
-      needVerify: orders.filter((order) => order.status === "Menunggu Pembayaran" && order.payment_proof_url).length,
+      newOrders: orders.filter((order) => normalizeStatus(order) === "menunggu_ongkir").length,
+      uploadedProofs: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran" && orderProof(order)).length,
+      needVerify: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran" && orderProof(order)).length,
     }),
     [orders],
   );
@@ -290,11 +486,11 @@ export default function AdminOrdersPage() {
             Filter Status
             <select
               value={filter}
-              onChange={(event) => setFilter(event.target.value as Status | "Semua")}
+              onChange={(event) => setFilter(event.target.value as FilterStatus)}
               className="rounded-md border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-400"
             >
               {statuses.map((status) => (
-                <option key={status} value={status}>{status}</option>
+                <option key={status} value={status}>{statusLabel(status as Status)}</option>
               ))}
             </select>
           </label>
@@ -303,6 +499,11 @@ export default function AdminOrdersPage() {
         <div className="mt-6 grid gap-5">
           {filteredOrders.map((order) => {
             const draft = drafts[order.id] || makeDraft(order);
+            const status = normalizeStatus(order);
+            const proof = orderProof(order);
+            const totalProduk = orderTotalProduk(order);
+            const ongkir = orderOngkir(order);
+            const grandTotal = orderGrandTotal(order);
 
             return (
               <article key={order.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -312,10 +513,10 @@ export default function AdminOrdersPage() {
                       {new Date(order.created_at).toLocaleString("id-ID")}
                     </p>
                     <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
-                    <p className="mt-1 text-sm text-slate-500">{order.customer_name || "-"} - {order.customer_phone || "-"}</p>
+                    <p className="mt-1 text-sm text-slate-500">{orderName(order) || "-"} - {orderPhone(order) || "-"}</p>
                   </div>
-                  <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(order.status)}`}>
-                    {order.status}
+                  <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
+                    {statusLabel(status)}
                   </span>
                 </div>
 
@@ -327,10 +528,10 @@ export default function AdminOrdersPage() {
                         {order.order_items.map((item) => (
                           <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
                             <div className="flex justify-between gap-3">
-                              <span>{item.nama_produk} x {item.qty}</span>
-                              <strong>{formatCurrency(Number(item.harga) * item.qty)}</strong>
+                              <span>{itemName(item)} x {itemQty(item)}</span>
+                              <strong>{formatCurrency(itemSubtotal(item))}</strong>
                             </div>
-                            {item.note && <p className="mt-1 text-xs text-slate-500">Catatan: {item.note}</p>}
+                            {firstText(item.note, item.catatan) && <p className="mt-1 text-xs text-slate-500">Catatan: {firstText(item.note, item.catatan)}</p>}
                           </div>
                         ))}
                       </div>
@@ -338,18 +539,20 @@ export default function AdminOrdersPage() {
 
                     <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
                       <h3 className="mb-2 font-bold text-slate-950">Alamat Customer</h3>
-                      <p>{order.shipping_address || "-"}</p>
-                      {order.maps_url && (
-                        <a href={order.maps_url} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
+                      <p>Nama: {orderName(order) || "-"}</p>
+                      <p>WhatsApp: {orderPhone(order) || "-"}</p>
+                      <p>Alamat: {orderAddress(order) || "-"}</p>
+                      {orderMaps(order) && (
+                        <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
                           Buka titik Google Maps
                         </a>
                       )}
                     </div>
 
-                    {order.payment_proof_url && (
+                    {proof && (
                       <div className="rounded-lg border border-slate-200 p-4">
                         <h3 className="font-bold">Bukti Pembayaran</h3>
-                        <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
                           Lihat Bukti
                         </a>
                       </div>
@@ -360,9 +563,9 @@ export default function AdminOrdersPage() {
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="font-bold">Total</h3>
                       <div className="mt-3 grid gap-2 text-sm">
-                        <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(order.total_produk)}</strong></div>
-                        <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(order.shipping_cost)}</strong></div>
-                        <div className="flex justify-between border-t border-slate-200 pt-2 text-base"><span>Grand Total</span><strong>{formatCurrency(order.grand_total)}</strong></div>
+                        <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
+                        <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
+                        <div className="flex justify-between border-t border-slate-200 pt-2 text-base"><span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong></div>
                       </div>
                     </div>
 
@@ -393,34 +596,39 @@ export default function AdminOrdersPage() {
                       </div>
                     </div>
 
-                    {order.payment_proof_url && order.status === "Menunggu Pembayaran" && (
-                      <div className="rounded-lg border border-slate-200 p-4">
-                        <h3 className="font-bold">Verifikasi Pembayaran</h3>
-                        <div className="mt-3 grid gap-3">
-                          <button
-                            disabled={savingId === order.id}
-                            onClick={() => approvePayment(order)}
-                            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                          >
-                            Approve Pembayaran
-                          </button>
-                          <textarea
-                            value={draft.rejectReason}
-                            onChange={(event) => updateDraft(order.id, "rejectReason", event.target.value)}
-                            placeholder="Alasan penolakan"
-                            rows={3}
-                            className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                          />
-                          <button
-                            disabled={savingId === order.id}
-                            onClick={() => rejectPayment(order)}
-                            className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                          >
-                            Tolak Pembayaran
-                          </button>
-                        </div>
+                    <div className="rounded-lg border border-slate-200 p-4">
+                      <h3 className="font-bold">Verifikasi Pesanan</h3>
+                      <div className="mt-3 grid gap-3">
+                        <button
+                          disabled={savingId === order.id || !proof}
+                          onClick={() => approvePayment(order)}
+                          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                          Approve Pembayaran
+                        </button>
+                        <textarea
+                          value={draft.rejectReason}
+                          onChange={(event) => updateDraft(order.id, "rejectReason", event.target.value)}
+                          placeholder="Alasan penolakan"
+                          rows={3}
+                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                        />
+                        <button
+                          disabled={savingId === order.id}
+                          onClick={() => rejectPayment(order)}
+                          className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                          Tolak Pesanan
+                        </button>
+                        <button
+                          disabled={savingId === order.id}
+                          onClick={() => deleteOrder(order)}
+                          className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
+                        >
+                          Hapus Pesanan
+                        </button>
                       </div>
-                    )}
+                    </div>
 
                     <div className="rounded-lg border border-slate-200 p-4">
                       <h3 className="font-bold">Pengiriman / Resi</h3>
@@ -437,12 +645,18 @@ export default function AdminOrdersPage() {
                           placeholder="Nama kurir"
                           className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
                         />
-                        <input
-                          value={draft.courierLogoUrl}
-                          onChange={(event) => updateDraft(order.id, "courierLogoUrl", event.target.value)}
-                          placeholder="URL logo kurir"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
+                        <label className="grid gap-2 text-sm font-bold text-slate-700">
+                          Logo kurir
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => uploadCourierLogo(order, event.target.files?.[0])}
+                            className="rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                          />
+                        </label>
+                        {draft.courierLogoUrl && (
+                          <img src={draft.courierLogoUrl} alt="Logo kurir" className="h-14 w-24 rounded-md border border-slate-200 object-contain p-2" />
+                        )}
                         <input
                           value={draft.trackingUrl}
                           onChange={(event) => updateDraft(order.id, "trackingUrl", event.target.value)}
