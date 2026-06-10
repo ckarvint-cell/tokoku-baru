@@ -117,17 +117,21 @@ export default function AdminCustomPage() {
 
   async function saveSiteSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+
     setSaving("site");
     setMessage("");
 
     const { error } = await supabase.from("site_settings").upsert({ id: true, ...siteSettings });
 
     setSaving("");
-    showResult(!error, error ? error.message : "Welcome text berhasil disimpan.");
+    showResult(!error, error ? error.message : "Welcome text berhasil diedit.");
   }
 
   async function savePaymentSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+
     setSaving("payment");
     setMessage("");
 
@@ -169,13 +173,15 @@ export default function AdminCustomPage() {
 
   async function saveFooterSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+
     setSaving("footer");
     setMessage("");
 
     const { error } = await supabase.from("footer_settings").upsert({ id: true, ...footerSettings });
 
     setSaving("");
-    showResult(!error, error ? error.message : "Footer setting berhasil disimpan.");
+    showResult(!error, error ? error.message : "Footer berhasil diedit.");
   }
 
   if (loading) {
