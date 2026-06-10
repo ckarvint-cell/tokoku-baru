@@ -14,12 +14,6 @@ type ProfileForm = {
   mapsUrl: string;
 };
 
-type PasswordForm = {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-};
-
 export default function SettingsPage() {
   const router = useRouter();
   const [form, setForm] = useState<ProfileForm>({
@@ -30,15 +24,9 @@ export default function SettingsPage() {
     address: "",
     mapsUrl: "",
   });
-  const [passwordForm, setPasswordForm] = useState<PasswordForm>({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
@@ -79,10 +67,6 @@ export default function SettingsPage() {
 
   function updateField(name: keyof ProfileForm, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
-  }
-
-  function updatePasswordField(name: keyof PasswordForm, value: string) {
-    setPasswordForm((current) => ({ ...current, [name]: value }));
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -129,55 +113,6 @@ export default function SettingsPage() {
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
-  }
-
-  async function changePassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setChangingPassword(true);
-    setPasswordMessage("");
-    setPasswordSuccess(false);
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setChangingPassword(false);
-      setPasswordMessage("Password baru dan confirm password harus sama.");
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      setChangingPassword(false);
-      setPasswordMessage("Password baru minimal 6 karakter.");
-      return;
-    }
-
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: form.email,
-      password: passwordForm.currentPassword,
-    });
-
-    if (verifyError) {
-      setChangingPassword(false);
-      setPasswordMessage("Password lama salah. Silakan cek kembali.");
-      return;
-    }
-
-    const { error } = await supabase.auth.updateUser({
-      password: passwordForm.newPassword,
-    });
-
-    setChangingPassword(false);
-
-    if (error) {
-      setPasswordMessage(error.message);
-      return;
-    }
-
-    setPasswordSuccess(true);
-    setPasswordMessage("Password berhasil diganti. Gunakan password baru saat login berikutnya.");
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
   }
 
   async function sendPasswordResetEmail() {
@@ -339,48 +274,14 @@ export default function SettingsPage() {
           </div>
         </form>
 
-        <form onSubmit={changePassword} className="mt-5 rounded-lg border border-rose-100 bg-white p-6 shadow-sm">
+        <section className="mt-5 rounded-lg border border-rose-100 bg-white p-6 shadow-sm">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Keamanan</p>
             <h2 className="mt-1 text-2xl font-bold">Ganti Password</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Masukkan password lama untuk mengganti password baru. Jika lupa password lama, kirim link reset ke email.
+              Untuk keamanan, password baru hanya bisa dibuat setelah Anda membuka link verifikasi yang dikirim ke email terdaftar.
+              Link hanya bisa dipakai sekali dan bisa kedaluwarsa.
             </p>
-          </div>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <label className="grid gap-2 text-sm font-medium">
-              Password Lama
-              <input
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(event) => updatePasswordField("currentPassword", event.target.value)}
-                required
-                className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
-              />
-            </label>
-
-            <label className="grid gap-2 text-sm font-medium">
-              Password Baru
-              <input
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(event) => updatePasswordField("newPassword", event.target.value)}
-                required
-                className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
-              />
-            </label>
-
-            <label className="grid gap-2 text-sm font-medium">
-              Confirm Password
-              <input
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(event) => updatePasswordField("confirmPassword", event.target.value)}
-                required
-                className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
-              />
-            </label>
           </div>
 
           {passwordMessage && (
@@ -390,19 +291,16 @@ export default function SettingsPage() {
           )}
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <button type="submit" disabled={changingPassword} className="rounded-md bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
-              {changingPassword ? "Mengganti..." : "Ganti Password"}
-            </button>
             <button
               type="button"
               onClick={sendPasswordResetEmail}
               disabled={sendingReset}
-              className="rounded-md border border-rose-200 bg-white px-5 py-3 text-sm font-bold text-rose-600 disabled:opacity-60"
+              className="rounded-md bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
             >
-              {sendingReset ? "Mengirim..." : "Kirim Link Reset ke Email"}
+              {sendingReset ? "Mengirim..." : "Kirim Link Verifikasi Ganti Password"}
             </button>
           </div>
-        </form>
+        </section>
       </div>
     </main>
   );

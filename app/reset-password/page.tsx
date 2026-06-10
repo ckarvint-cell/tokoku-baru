@@ -87,16 +87,30 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       setMessage(error.message);
       return;
     }
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.access_token) {
+      await fetch("/api/password-audit", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+    }
+
+    setLoading(false);
     await supabase.auth.signOut();
     setSuccess(true);
-    setMessage("Password berhasil diubah. Silakan login dengan password baru.");
+    setMessage("Password berhasil diubah dan sudah diverifikasi. Silakan login dengan password baru.");
     setPassword("");
     setConfirmPassword("");
   }
