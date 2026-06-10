@@ -240,10 +240,12 @@ export default function OrdersPage() {
   async function updateOrder(orderId: string, payload: Row) {
     const adaptivePayload = { ...payload };
     let error: { message: string } | null = null;
+    let data = null as Order | null;
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId).select("*").maybeSingle();
       error = result.error;
+      data = result.data as Order | null;
 
       const missingColumn = getMissingColumn(error?.message);
       if (!missingColumn) break;
@@ -251,7 +253,7 @@ export default function OrdersPage() {
       delete adaptivePayload[missingColumn];
     }
 
-    return error;
+    return { error, data };
   }
 
   async function uploadPaymentProof(order: Order, file: File | undefined) {
@@ -280,12 +282,16 @@ export default function OrdersPage() {
 
     updateError = rpcResult.error;
 
+    let updatedOrder = null as Order | null;
+
     if (updateError) {
-      updateError = await updateOrder(order.id, {
+      const updateResult = await updateOrder(order.id, {
         payment_proof_url: data.publicUrl,
         bukti_pembayaran: data.publicUrl,
         updated_at: new Date().toISOString(),
       });
+      updateError = updateResult.error;
+      updatedOrder = updateResult.data;
     }
 
     if (updateError) {
@@ -294,8 +300,19 @@ export default function OrdersPage() {
       return;
     }
 
+    if (!updatedOrder) {
+      const { data: refreshedOrder } = await supabase.from("orders").select("*").eq("id", order.id).maybeSingle();
+      updatedOrder = refreshedOrder as Order | null;
+    }
+
+    if (!updatedOrder || !orderProof(updatedOrder)) {
+      setMessage("Bukti berhasil diupload ke storage, tetapi belum tersimpan ke pesanan. Jalankan SQL order-workflow terbaru di Supabase lalu upload ulang.");
+      setUploadingId("");
+      return;
+    }
+
     setOrders((current) =>
-      current.map((item) => (item.id === order.id ? { ...item, payment_proof_url: data.publicUrl, bukti_pembayaran: data.publicUrl } : item)),
+      current.map((item) => (item.id === order.id ? { ...item, ...updatedOrder } : item)),
     );
     setMessage("Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
     setUploadingId("");
@@ -425,9 +442,15 @@ export default function OrdersPage() {
                           {paymentSettings.payment_note || officialPaymentWarning}
                         </p>
                         {proof ? (
-                          <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-bold text-sky-700">
-                            Bukti pembayaran sudah dikirim
-                          </a>
+                          <div className="mt-3 rounded-md bg-white p-3">
+                            <p className="text-sm font-bold text-sky-800">Bukti pembayaran sudah dikirim</p>
+                            <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-sky-100 bg-slate-50">
+                              <img src={proof} alt="Bukti pembayaran" className="max-h-72 w-full object-contain" />
+                            </a>
+                            <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-sky-600 px-4 py-2 text-sm font-bold text-white">
+                              Lihat file penuh
+                            </a>
+                          </div>
                         ) : (
                           <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
                             Upload Bukti Pembayaran

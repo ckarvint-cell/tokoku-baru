@@ -29,9 +29,12 @@ alter table public.orders add column if not exists shipping_address text;
 alter table public.orders add column if not exists maps_url text;
 alter table public.orders add column if not exists total_produk numeric(12,2) not null default 0;
 alter table public.orders add column if not exists shipping_cost numeric(12,2) not null default 0;
+alter table public.orders add column if not exists ongkir numeric(12,2) not null default 0;
 alter table public.orders add column if not exists grand_total numeric(12,2) not null default 0;
 alter table public.orders add column if not exists status text not null default 'Menunggu Ongkir';
+alter table public.orders add column if not exists status_pesanan text;
 alter table public.orders add column if not exists payment_proof_url text;
+alter table public.orders add column if not exists bukti_pembayaran text;
 alter table public.orders add column if not exists payment_rejected_reason text;
 alter table public.orders add column if not exists tracking_number text;
 alter table public.orders add column if not exists courier_name text;
@@ -156,11 +159,16 @@ as $$
 begin
   update public.orders
   set payment_proof_url = proof_url,
-      paid_at = now(),
+      bukti_pembayaran = proof_url,
       updated_at = now()
   where id = order_id_to_update
     and coalesce(customer_id, user_id) = auth.uid()
-    and status = 'Menunggu Pembayaran';
+    and coalesce(shipping_cost, ongkir, 0) > 0
+    and (
+      status is null
+      or lower(status) in ('menunggu pembayaran', 'menunggu_pembayaran', 'pending', 'baru')
+      or lower(coalesce(status_pesanan, '')) in ('menunggu pembayaran', 'menunggu_pembayaran', 'pending', 'baru')
+    );
 
   if not found then
     raise exception 'Pesanan tidak ditemukan atau belum bisa upload bukti pembayaran.';

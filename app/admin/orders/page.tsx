@@ -566,8 +566,11 @@ export default function AdminOrdersPage() {
                     {proof && (
                       <div className="rounded-lg border border-slate-200 p-4">
                         <h3 className="font-bold">Bukti Pembayaran</h3>
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                          <img src={proof} alt="Bukti pembayaran customer" className="max-h-80 w-full object-contain" />
+                        </a>
                         <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                          Lihat Bukti
+                          Lihat file penuh
                         </a>
                       </div>
                     )}
