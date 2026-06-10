@@ -324,6 +324,8 @@ function CheckoutPanel({
   cart,
   form,
   confirming,
+  checkoutError,
+  submitting,
   onClose,
   onBackToCart,
   onChange,
@@ -335,6 +337,8 @@ function CheckoutPanel({
   cart: CartItem[];
   form: CheckoutForm;
   confirming: boolean;
+  checkoutError: string;
+  submitting: boolean;
   onClose: () => void;
   onBackToCart: () => void;
   onChange: (name: keyof CheckoutForm, value: string) => void;
@@ -371,7 +375,10 @@ function CheckoutPanel({
 
         <div className="grid gap-5 px-5 py-5">
           <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3">
-            <p className="text-sm font-bold text-slate-900">Ringkasan Produk</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-bold text-slate-900">Ringkasan Produk</p>
+              <p className="text-sm font-bold text-slate-900">{totalQty} item</p>
+            </div>
             <div className="mt-3 grid gap-2">
               {cart.map((item) => (
                 <div key={item.id} className="grid gap-1 text-sm">
@@ -379,11 +386,24 @@ function CheckoutPanel({
                     <span className="min-w-0 truncate text-slate-600">{item.nama_produk} x {item.qty}</span>
                     <strong>Rp {(getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty).toLocaleString("id-ID")}</strong>
                   </div>
+                  <p className="text-xs text-slate-500">
+                    Harga satuan Rp {getDiscountedPrice(Number(item.harga), item.harga_diskon).toLocaleString("id-ID")}
+                  </p>
                   {item.note && <p className="text-xs leading-5 text-slate-500">Catatan: {item.note}</p>}
                 </div>
               ))}
             </div>
+            <div className="mt-3 flex items-center justify-between border-t border-rose-200 pt-3 text-base">
+              <span className="font-bold text-slate-700">Total Produk</span>
+              <strong>Rp {subtotal.toLocaleString("id-ID")}</strong>
+            </div>
           </div>
+
+          {checkoutError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {checkoutError}
+            </div>
+          )}
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4">
             <p className="text-sm font-bold text-amber-950">Ongkir akan dihitung admin.</p>
@@ -402,13 +422,15 @@ function CheckoutPanel({
                 <button
                   type="button"
                   onClick={onConfirm}
-                  className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white"
+                  disabled={submitting}
+                  className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
                 >
-                  Ya, Buat Pesanan
+                  {submitting ? "Membuat Pesanan..." : "Ya, Buat Pesanan"}
                 </button>
                 <button
                   type="button"
                   onClick={onCancelConfirm}
+                  disabled={submitting}
                   className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"
                 >
                   Tidak, Cek Lagi
@@ -509,6 +531,7 @@ export default function Home() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const [submittingCheckout, setSubmittingCheckout] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSiteSettings);
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>({
@@ -640,6 +663,7 @@ export default function Home() {
 
   function openCheckout() {
     if (cart.length === 0) return;
+    setCheckoutError("");
     setCartOpen(false);
     setCheckoutOpen(true);
     setConfirmingCheckout(false);
@@ -648,6 +672,7 @@ export default function Home() {
   function closeCheckout() {
     setCheckoutOpen(false);
     setConfirmingCheckout(false);
+    setCheckoutError("");
   }
 
   function useCheckoutGps() {
@@ -670,6 +695,7 @@ export default function Home() {
   }
 
   function submitCheckoutForm() {
+    setCheckoutError("");
     setConfirmingCheckout(true);
   }
 
@@ -680,14 +706,14 @@ export default function Home() {
     const user = sessionData.session?.user;
 
     if (!user) {
-      setNotice("Silakan login terlebih dahulu sebelum checkout.");
-      setCheckoutOpen(false);
+      setCheckoutError("Silakan login terlebih dahulu sebelum checkout.");
       setConfirmingCheckout(false);
       return;
     }
 
     setSubmittingCheckout(true);
     setNotice("");
+    setCheckoutError("");
 
     const totalProduk = cart.reduce(
       (total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty,
@@ -711,7 +737,7 @@ export default function Home() {
       .single();
 
     if (orderError || !order) {
-      setNotice(orderError?.message || "Gagal membuat pesanan.");
+      setCheckoutError(orderError?.message || "Gagal membuat pesanan.");
       setSubmittingCheckout(false);
       setConfirmingCheckout(false);
       return;
@@ -729,7 +755,8 @@ export default function Home() {
     const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
 
     if (itemsError) {
-      setNotice(itemsError.message);
+      await supabase.from("orders").delete().eq("id", order.id);
+      setCheckoutError(itemsError.message);
       setSubmittingCheckout(false);
       setConfirmingCheckout(false);
       return;
@@ -893,6 +920,8 @@ export default function Home() {
           cart={cart}
           form={checkoutForm}
           confirming={confirmingCheckout}
+          checkoutError={checkoutError}
+          submitting={submittingCheckout}
           onClose={closeCheckout}
           onBackToCart={() => {
             setCheckoutOpen(false);
