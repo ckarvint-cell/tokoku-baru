@@ -934,6 +934,7 @@ export default function Home() {
 
     let itemsError = null as { message: string } | null;
     const noteColumns = ["note", "catatan", "catatan_produk", "item_note", "keterangan"];
+    const removedItemColumns = new Set<string>();
 
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const result = await supabase.from("order_items").insert(orderItems);
@@ -941,6 +942,7 @@ export default function Home() {
 
       const missingColumn = getMissingColumn(itemsError?.message);
       if (missingColumn) {
+        removedItemColumns.add(missingColumn);
         orderItems = orderItems.map((item) => {
           const nextItem = { ...item } as Record<string, string | number | null>;
           delete nextItem[missingColumn];
@@ -953,11 +955,19 @@ export default function Home() {
             const note = cart[index]?.note?.trim() || "";
             if (!note) return item;
 
-            return {
+            const nextItem = {
               ...item,
-              nama_produk: attachItemNoteFallback(String(item.nama_produk || cart[index].nama_produk), note),
-              product_name: attachItemNoteFallback(String(item.product_name || cart[index].nama_produk), note),
             };
+
+            if (!removedItemColumns.has("nama_produk") && "nama_produk" in nextItem) {
+              nextItem.nama_produk = attachItemNoteFallback(String(nextItem.nama_produk || cart[index].nama_produk), note);
+            }
+
+            if (!removedItemColumns.has("product_name") && "product_name" in nextItem) {
+              nextItem.product_name = attachItemNoteFallback(String(nextItem.product_name || cart[index].nama_produk), note);
+            }
+
+            return nextItem;
           });
         }
         continue;
