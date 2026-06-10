@@ -72,8 +72,11 @@ const defaultPaymentSettings: PaymentSettings = {
   account_number: "",
   account_holder: "",
   payment_logo_url: "",
-  payment_note: "Pembayaran resmi hanya dilakukan melalui rekening yang tertera di bawah ini. Di luar rekening tersebut, toko tidak bertanggung jawab atas transaksi yang terjadi. Mohon periksa kembali sebelum melakukan transfer.",
+  payment_note: "",
 };
+
+const officialPaymentWarning =
+  "Transfer hanya dilakukan ke rekening resmi di bawah ini setelah ongkir ditentukan dan Grand Total tampil di Daftar Pesanan. Pembayaran di luar rekening resmi toko tidak menjadi tanggung jawab kami. Terima kasih atas pengertiannya.";
 
 const defaultFooterSettings: FooterSettings = {
   store_name: "Tokoku",
@@ -438,7 +441,7 @@ function CheckoutPanel({
               )}
             </div>
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-800">
-              {paymentSettings.payment_note || defaultPaymentSettings.payment_note}
+              {officialPaymentWarning}
             </p>
           </div>
 

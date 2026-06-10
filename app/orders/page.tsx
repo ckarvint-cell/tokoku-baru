@@ -48,8 +48,11 @@ const defaultPaymentSettings: PaymentSettings = {
   account_number: "",
   account_holder: "",
   payment_logo_url: "",
-  payment_note: "Transfer sesuai grand total lalu upload bukti pembayaran.",
+  payment_note: "",
 };
+
+const officialPaymentWarning =
+  "Transfer sesuai Grand Total hanya ke rekening resmi di bawah ini. Pembayaran di luar rekening resmi toko tidak menjadi tanggung jawab kami. Setelah transfer berhasil, upload bukti pembayaran pada pesanan ini.";
 
 function formatCurrency(value: number | null | undefined) {
   return `Rp ${Number(value || 0).toLocaleString("id-ID")}`;
@@ -252,7 +255,9 @@ export default function OrdersPage() {
                           <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
                         </div>
                       </div>
-                      <p className="mt-3 text-sm text-slate-600">{paymentSettings.payment_note || defaultPaymentSettings.payment_note}</p>
+                      <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
+                        {paymentSettings.payment_note || officialPaymentWarning}
+                      </p>
                       {order.payment_proof_url ? (
                         <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-bold text-sky-700">
                           Lihat bukti pembayaran

@@ -185,3 +185,5 @@ using (
   bucket_id = 'payment-proofs'
   and auth.role() = 'authenticated'
 );
+
+notify pgrst, 'reload schema';
