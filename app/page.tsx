@@ -110,6 +110,33 @@ function getMissingColumn(errorMessage: string | undefined) {
   return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
+function getRequiredColumn(errorMessage: string | undefined) {
+  return errorMessage?.match(/null value in column "([^"]+)"/)?.[1] || "";
+}
+
+function getOrderFallbackValue(column: string, userId: string, email: string, form: CheckoutForm, totalProduk: number) {
+  const normalized = column.toLowerCase();
+
+  if (normalized === "id") return crypto.randomUUID();
+  if (normalized.includes("email")) return email;
+  if (normalized.includes("user") || normalized.includes("customer") || normalized.includes("pelanggan")) {
+    if (normalized.includes("nama") || normalized.includes("name")) return form.name;
+    if (normalized.includes("phone") || normalized.includes("whatsapp") || normalized.includes("telepon") || normalized.includes("hp")) return form.phone;
+    if (normalized.includes("alamat") || normalized.includes("address")) return form.address;
+    return userId;
+  }
+  if (normalized.includes("nama") || normalized.includes("penerima") || normalized.includes("name")) return form.name;
+  if (normalized.includes("phone") || normalized.includes("whatsapp") || normalized.includes("telepon") || normalized.includes("hp")) return form.phone;
+  if (normalized.includes("alamat") || normalized.includes("address")) return form.address;
+  if (normalized.includes("maps") || normalized.includes("map") || normalized.includes("gps") || normalized.includes("lokasi")) return form.mapsUrl || "";
+  if (normalized.includes("ongkir") || normalized.includes("shipping")) return 0;
+  if (normalized.includes("total") || normalized.includes("harga") || normalized.includes("bayar") || normalized.includes("grand")) return totalProduk;
+  if (normalized.includes("status")) return "Menunggu Ongkir";
+  if (normalized.includes("tanggal") || normalized.includes("date") || normalized.includes("time")) return new Date().toISOString();
+
+  return "";
+}
+
 function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: (product: Product) => void }) {
   const [imageIndex, setImageIndex] = useState(0);
   const images = product.image_urls?.length ? product.image_urls : [];
@@ -767,6 +794,7 @@ export default function Home() {
     setSubmittingCheckout(true);
     setNotice("");
     setCheckoutError("");
+    const customerEmail = user.email || "";
 
     const totalProduk = cart.reduce(
       (total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty,
@@ -774,11 +802,21 @@ export default function Home() {
     );
 
     const orderPayload = {
+      email_customer: customerEmail,
+      customer_email: customerEmail,
+      email: customerEmail,
       nama_penerima: checkoutForm.name,
+      nama_customer: checkoutForm.name,
       nomor_whatsapp: checkoutForm.phone,
       no_whatsapp: checkoutForm.phone,
+      whatsapp: checkoutForm.phone,
+      telepon: checkoutForm.phone,
       alamat_pengiriman: checkoutForm.address,
+      alamat_customer: checkoutForm.address,
       alamat: checkoutForm.address,
+      titik_gps: checkoutForm.mapsUrl || null,
+      gps_url: checkoutForm.mapsUrl || null,
+      google_maps: checkoutForm.mapsUrl || null,
       total_harga: totalProduk,
       total: totalProduk,
       customer_name: checkoutForm.name,
@@ -802,15 +840,24 @@ export default function Home() {
       user_id: user.id,
     };
 
-    for (let attempt = 0; attempt < 14; attempt += 1) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
       const result = await supabase.from("orders").insert(adaptivePayload).select("id").single();
       order = result.data;
       orderError = result.error;
 
       const missingColumn = getMissingColumn(orderError?.message);
-      if (!missingColumn) break;
+      if (missingColumn) {
+        delete adaptivePayload[missingColumn];
+        continue;
+      }
 
-      delete adaptivePayload[missingColumn];
+      const requiredColumn = getRequiredColumn(orderError?.message);
+      if (requiredColumn) {
+        adaptivePayload[requiredColumn] = getOrderFallbackValue(requiredColumn, user.id, customerEmail, checkoutForm, totalProduk);
+        continue;
+      }
+
+      break;
     }
 
     if (orderError || !order) {
