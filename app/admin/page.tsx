@@ -70,7 +70,9 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white p-5 lg:block">
-        <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Tokoku</p>
+        <Link href="/" className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
+          Tokoku
+        </Link>
         <h1 className="mt-2 text-2xl font-bold">Admin Panel</h1>
         <nav className="mt-8 grid gap-2">
           <Link href="/admin" className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white">

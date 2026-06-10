@@ -739,7 +739,9 @@ export default function Home() {
       <header className="border-b border-rose-100 bg-white/90">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">{siteSettings.store_name || footerSettings.store_name || "Tokoku"}</p>
+            <Link href="/" className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
+              {siteSettings.store_name || footerSettings.store_name || "Tokoku"}
+            </Link>
             <h1 className="mt-1 text-2xl font-bold">Katalog Produk</h1>
           </div>
           <nav className="flex flex-wrap gap-2">
@@ -841,7 +843,9 @@ export default function Home() {
       <footer className="border-t border-rose-100 bg-white">
         <div className="mx-auto grid max-w-6xl gap-5 px-5 py-8 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">{footerSettings.store_name || siteSettings.store_name || "Tokoku"}</p>
+            <Link href="/" className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
+              {footerSettings.store_name || siteSettings.store_name || "Tokoku"}
+            </Link>
             <p className="mt-3 leading-6">{footerSettings.address || "Alamat toko belum diatur."}</p>
           </div>
           <div>

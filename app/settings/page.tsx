@@ -168,7 +168,9 @@ export default function SettingsPage() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Tokoku</p>
+            <Link href="/" className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
+              Tokoku
+            </Link>
             <h1 className="mt-1 text-3xl font-bold">Setting Profil</h1>
           </div>
           <Link href="/" className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-medium">

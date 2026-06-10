@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -56,6 +58,8 @@ const defaultFooterSettings: FooterSettings = {
   copyright_text: "© Tokoku. All rights reserved.",
 };
 
+const PAYMENT_ASSETS_BUCKET = "payment-assets";
+
 export default function AdminCustomPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -64,6 +68,7 @@ export default function AdminCustomPage() {
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
+  const [paymentLogoFile, setPaymentLogoFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -126,10 +131,40 @@ export default function AdminCustomPage() {
     setSaving("payment");
     setMessage("");
 
-    const { error } = await supabase.from("payment_settings").upsert({ id: true, ...paymentSettings });
+    let paymentLogoUrl = paymentSettings.payment_logo_url;
+
+    if (paymentLogoFile) {
+      const safeName = paymentLogoFile.name.replace(/[^a-zA-Z0-9.-]/g, "-");
+      const path = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage.from(PAYMENT_ASSETS_BUCKET).upload(path, paymentLogoFile, {
+        cacheControl: "3600",
+        contentType: paymentLogoFile.type,
+        upsert: false,
+      });
+
+      if (uploadError) {
+        setSaving("");
+        showResult(false, uploadError.message);
+        return;
+      }
+
+      const { data } = supabase.storage.from(PAYMENT_ASSETS_BUCKET).getPublicUrl(path);
+      paymentLogoUrl = data.publicUrl;
+    }
+
+    const payload = { id: true, ...paymentSettings, payment_logo_url: paymentLogoUrl };
+    const { error } = await supabase.from("payment_settings").upsert(payload);
 
     setSaving("");
-    showResult(!error, error ? error.message : "Checkout payment setting berhasil disimpan.");
+    if (error) {
+      showResult(false, error.message);
+      return;
+    }
+
+    setPaymentSettings(payload);
+    setPaymentLogoFile(null);
+    showResult(true, "Checkout payment setting berhasil disimpan.");
   }
 
   async function saveFooterSettings(event: FormEvent<HTMLFormElement>) {
@@ -192,10 +227,31 @@ export default function AdminCustomPage() {
               Nama Pemilik Rekening
               <input value={paymentSettings.account_holder} onChange={(event) => setPaymentSettings((current) => ({ ...current, account_holder: event.target.value }))} className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
             </label>
-            <label className="grid gap-2 text-sm font-medium">
-              URL Logo Bank / Pembayaran
-              <input value={paymentSettings.payment_logo_url} onChange={(event) => setPaymentSettings((current) => ({ ...current, payment_logo_url: event.target.value }))} placeholder="https://..." className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
-            </label>
+            <div className="grid gap-2 text-sm font-medium">
+              Logo Bank / Pembayaran
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setPaymentLogoFile(event.target.files?.[0] || null)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+              />
+              {paymentLogoFile && <span className="text-xs text-slate-500">File dipilih: {paymentLogoFile.name}</span>}
+              {paymentSettings.payment_logo_url && (
+                <div className="flex items-center gap-3 rounded-md border border-slate-200 p-3">
+                  <img src={paymentSettings.payment_logo_url} alt="Logo pembayaran" className="h-12 w-20 object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentLogoFile(null);
+                      setPaymentSettings((current) => ({ ...current, payment_logo_url: "" }));
+                    }}
+                    className="text-xs font-bold text-rose-600"
+                  >
+                    Hapus logo
+                  </button>
+                </div>
+              )}
+            </div>
             <label className="grid gap-2 text-sm font-medium sm:col-span-2">
               Catatan Pembayaran
               <textarea value={paymentSettings.payment_note} onChange={(event) => setPaymentSettings((current) => ({ ...current, payment_note: event.target.value }))} rows={3} className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400" />
