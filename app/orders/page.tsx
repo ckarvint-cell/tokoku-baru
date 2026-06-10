@@ -141,6 +141,10 @@ function itemSubtotal(item: OrderItem) {
   return subtotal > 0 ? subtotal : itemPrice(item) * itemQty(item);
 }
 
+function itemNote(item: OrderItem) {
+  return firstText(item.note, item.catatan, item["catatan_produk"], item["item_note"], item["keterangan"]);
+}
+
 function orderItemsTotal(order: Order) {
   return (order.order_items || []).reduce((total, item) => total + itemSubtotal(item), 0);
 }
@@ -468,7 +472,7 @@ export default function OrdersPage() {
                               <span>{itemName(item)} x {itemQty(item)}</span>
                               <strong>{formatCurrency(itemSubtotal(item))}</strong>
                             </div>
-                            {firstText(item.note, item.catatan) && <p className="mt-1 text-xs text-slate-500">Catatan: {firstText(item.note, item.catatan)}</p>}
+                            {itemNote(item) && <p className="mt-1 text-xs text-slate-500">Catatan: {itemNote(item)}</p>}
                           </div>
                         ))}
                       </div>

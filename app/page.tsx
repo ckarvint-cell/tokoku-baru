@@ -921,6 +921,9 @@ export default function Home() {
       subtotal: getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty,
       note: item.note || null,
       catatan: item.note || null,
+      catatan_produk: item.note || null,
+      item_note: item.note || null,
+      keterangan: item.note || null,
     }));
 
     let itemsError = null as { message: string } | null;

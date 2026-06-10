@@ -71,6 +71,10 @@ create table if not exists public.order_items (
 );
 
 alter table public.order_items add column if not exists note text;
+alter table public.order_items add column if not exists catatan text;
+alter table public.order_items add column if not exists catatan_produk text;
+alter table public.order_items add column if not exists item_note text;
+alter table public.order_items add column if not exists keterangan text;
 
 create or replace function public.is_manager_or_admin()
 returns boolean
