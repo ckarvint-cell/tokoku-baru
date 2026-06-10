@@ -36,21 +36,12 @@ type CheckoutForm = {
   phone: string;
   address: string;
   mapsUrl: string;
-  proofName: string;
 };
 
 type SiteSettings = {
   store_name: string;
   welcome_template: string;
   welcome_description: string;
-};
-
-type PaymentSettings = {
-  bank_name: string;
-  account_number: string;
-  account_holder: string;
-  payment_logo_url: string;
-  payment_note: string;
 };
 
 type FooterSettings = {
@@ -66,14 +57,6 @@ const defaultSiteSettings: SiteSettings = {
   store_name: "Tokoku",
   welcome_template: "{greeting}, {name}",
   welcome_description: "Pilih koleksi favorit, masukkan ke keranjang, lalu upload bukti transfer saat checkout.",
-};
-
-const defaultPaymentSettings: PaymentSettings = {
-  bank_name: "",
-  account_number: "",
-  account_holder: "",
-  payment_logo_url: "",
-  payment_note: "Transfer sesuai subtotal lalu upload bukti transfer.",
 };
 
 const defaultFooterSettings: FooterSettings = {
@@ -348,7 +331,6 @@ function CheckoutPanel({
   onSubmit,
   onConfirm,
   onCancelConfirm,
-  paymentSettings,
 }: {
   cart: CartItem[];
   form: CheckoutForm;
@@ -360,7 +342,6 @@ function CheckoutPanel({
   onSubmit: () => void;
   onConfirm: () => void;
   onCancelConfirm: () => void;
-  paymentSettings: PaymentSettings;
 }) {
   const subtotal = cart.reduce((total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty, 0);
   const totalQty = cart.reduce((total, item) => total + item.qty, 0);
@@ -404,34 +385,18 @@ function CheckoutPanel({
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Pembayaran</p>
-                <h3 className="mt-1 text-lg font-bold">{paymentSettings.bank_name || "Bank belum diatur"}</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  No. Rekening: <span className="font-bold text-slate-950">{paymentSettings.account_number || "-"}</span>
-                </p>
-                <p className="text-sm text-slate-600">
-                  Atas Nama: <span className="font-bold text-slate-950">{paymentSettings.account_holder || "-"}</span>
-                </p>
-              </div>
-              {paymentSettings.payment_logo_url && (
-                <img
-                  src={paymentSettings.payment_logo_url}
-                  alt={paymentSettings.bank_name || "Logo pembayaran"}
-                  className="h-14 w-24 rounded-md border border-slate-100 object-contain p-2"
-                />
-              )}
-            </div>
-            <p className="mt-3 text-sm leading-6 text-slate-500">{paymentSettings.payment_note || defaultPaymentSettings.payment_note}</p>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4">
+            <p className="text-sm font-bold text-amber-950">Ongkir akan dihitung admin.</p>
+            <p className="mt-2 text-sm leading-6 text-amber-800">
+              Setelah pesanan dibuat, status masuk ke Daftar Pesanan sebagai Menunggu Ongkir. Bukti pembayaran baru bisa diupload setelah ongkir ditentukan.
+            </p>
           </div>
 
           {confirming ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4">
               <h3 className="text-lg font-bold text-emerald-900">Buat pesanan sekarang?</h3>
               <p className="mt-2 text-sm leading-6 text-emerald-800">
-                Pastikan alamat, nomor WhatsApp, titik maps, dan bukti transfer sudah benar.
+                Pastikan alamat, nomor WhatsApp, dan titik maps sudah benar. Pesanan akan masuk ke admin untuk dihitung ongkir.
               </p>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <button
@@ -514,17 +479,6 @@ function CheckoutPanel({
                   )}
                 </div>
               </div>
-              <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                Bukti Transfer
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => onChange("proofName", event.target.files?.[0]?.name || "")}
-                  required
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                />
-                {form.proofName && <span className="text-xs text-slate-500">File dipilih: {form.proofName}</span>}
-              </label>
               <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
                 <button type="submit" className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white">
                   Buat Pesanan
@@ -554,15 +508,14 @@ export default function Home() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
+  const [submittingCheckout, setSubmittingCheckout] = useState(false);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSiteSettings);
-  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>({
     name: "",
     phone: "",
     address: "",
     mapsUrl: "",
-    proofName: "",
   });
 
   useEffect(() => {
@@ -629,14 +582,12 @@ export default function Home() {
 
   useEffect(() => {
     async function loadCustomSettings() {
-      const [siteResult, paymentResult, footerResult] = await Promise.all([
+      const [siteResult, footerResult] = await Promise.all([
         supabase.from("site_settings").select("store_name,welcome_template,welcome_description").eq("id", true).maybeSingle(),
-        supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
         supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
       ]);
 
       if (siteResult.data) setSiteSettings({ ...defaultSiteSettings, ...siteResult.data });
-      if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
     }
 
@@ -722,12 +673,73 @@ export default function Home() {
     setConfirmingCheckout(true);
   }
 
-  function confirmCheckout() {
+  async function confirmCheckout() {
+    if (submittingCheckout) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user;
+
+    if (!user) {
+      setNotice("Silakan login terlebih dahulu sebelum checkout.");
+      setCheckoutOpen(false);
+      setConfirmingCheckout(false);
+      return;
+    }
+
+    setSubmittingCheckout(true);
+    setNotice("");
+
+    const totalProduk = cart.reduce(
+      (total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty,
+      0,
+    );
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        customer_id: user.id,
+        customer_name: checkoutForm.name,
+        customer_phone: checkoutForm.phone,
+        shipping_address: checkoutForm.address,
+        maps_url: checkoutForm.mapsUrl || null,
+        total_produk: totalProduk,
+        shipping_cost: 0,
+        grand_total: totalProduk,
+        status: "Menunggu Ongkir",
+      })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      setNotice(orderError?.message || "Gagal membuat pesanan.");
+      setSubmittingCheckout(false);
+      setConfirmingCheckout(false);
+      return;
+    }
+
+    const orderItems = cart.map((item) => ({
+      order_id: order.id,
+      product_id: item.id,
+      nama_produk: item.nama_produk,
+      harga: getDiscountedPrice(Number(item.harga), item.harga_diskon),
+      qty: item.qty,
+      note: item.note || null,
+    }));
+
+    const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+
+    if (itemsError) {
+      setNotice(itemsError.message);
+      setSubmittingCheckout(false);
+      setConfirmingCheckout(false);
+      return;
+    }
+
     setCart([]);
     setCheckoutOpen(false);
     setConfirmingCheckout(false);
-    setNotice("Pesanan berhasil dibuat di tampilan checkout. Step berikutnya kita sambungkan ke database Supabase.");
-    setCheckoutForm((current) => ({ ...current, proofName: "" }));
+    setSubmittingCheckout(false);
+    setNotice("Pesanan berhasil dibuat. Silakan cek Daftar Pesanan untuk menunggu ongkir dari admin.");
   }
 
   const name = profile?.full_name || "Pengunjung";
@@ -892,7 +904,6 @@ export default function Home() {
           onSubmit={submitCheckoutForm}
           onConfirm={confirmCheckout}
           onCancelConfirm={() => setConfirmingCheckout(false)}
-          paymentSettings={paymentSettings}
         />
       )}
     </main>
