@@ -197,6 +197,13 @@ function getMissingColumn(errorMessage: string | undefined) {
   return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
+function getPaymentProofPath(publicUrl: string) {
+  const marker = "/payment-proofs/";
+  const index = publicUrl.indexOf(marker);
+  if (index === -1) return "";
+  return decodeURIComponent(publicUrl.slice(index + marker.length).split("?")[0]);
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -231,6 +238,11 @@ export default function OrdersPage() {
       }
 
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
+      const checkoutSuccess = window.sessionStorage.getItem("checkout_success");
+      if (checkoutSuccess) {
+        setMessage(checkoutSuccess);
+        window.sessionStorage.removeItem("checkout_success");
+      }
       setLoading(false);
     }
 
@@ -273,6 +285,7 @@ export default function OrdersPage() {
     }
 
     const { data } = supabase.storage.from("payment-proofs").getPublicUrl(path);
+    const previousProof = orderProof(order);
     let updateError = null as { message: string } | null;
 
     const rpcResult = await supabase.rpc("customer_upload_payment_proof", {
@@ -314,7 +327,12 @@ export default function OrdersPage() {
     setOrders((current) =>
       current.map((item) => (item.id === order.id ? { ...item, ...updatedOrder } : item)),
     );
-    setMessage("Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
+    const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
+    if (previousPath) {
+      await supabase.storage.from("payment-proofs").remove([previousPath]);
+    }
+
+    setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
     setUploadingId("");
   }
 
@@ -441,7 +459,7 @@ export default function OrdersPage() {
                         <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
                           {paymentSettings.payment_note || officialPaymentWarning}
                         </p>
-                        {proof ? (
+                        {proof && (
                           <div className="mt-3 rounded-md bg-white p-3">
                             <p className="text-sm font-bold text-sky-800">Bukti pembayaran sudah dikirim</p>
                             <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-sky-100 bg-slate-50">
@@ -451,18 +469,17 @@ export default function OrdersPage() {
                               Lihat file penuh
                             </a>
                           </div>
-                        ) : (
-                          <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
-                            Upload Bukti Pembayaran
-                            <input
-                              type="file"
-                              accept="image/*"
-                              disabled={uploadingId === order.id}
-                              onChange={(event) => uploadPaymentProof(order, event.target.files?.[0])}
-                              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                            />
-                          </label>
                         )}
+                        <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
+                          {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={uploadingId === order.id}
+                            onChange={(event) => uploadPaymentProof(order, event.target.files?.[0])}
+                            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                          />
+                        </label>
                       </div>
                     )}
 

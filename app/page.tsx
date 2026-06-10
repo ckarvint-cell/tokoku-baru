@@ -963,7 +963,8 @@ export default function Home() {
     setCheckoutOpen(false);
     setConfirmingCheckout(false);
     setSubmittingCheckout(false);
-    setNotice("Pesanan berhasil dibuat. Silakan cek Daftar Pesanan untuk menunggu ongkir dari admin.");
+    window.sessionStorage.setItem("checkout_success", "Kamu berhasil checkout. Pesanan masuk ke Daftar Pesanan dan sedang menunggu ongkir dari admin.");
+    window.location.href = "/orders";
   }
 
   const name = profile?.full_name || "Pengunjung";
