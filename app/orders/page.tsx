@@ -207,6 +207,10 @@ function getPaymentProofPath(publicUrl: string) {
   return decodeURIComponent(publicUrl.slice(index + marker.length).split("?")[0]);
 }
 
+function getMissingColumn(errorMessage: string | undefined) {
+  return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -261,6 +265,28 @@ export default function OrdersPage() {
     loadData();
   }, [router]);
 
+  async function savePaymentProofDirectly(orderId: string, proofUrl: string) {
+    const payload: Row = {
+      payment_proof_url: proofUrl,
+      bukti_pembayaran: proofUrl,
+      updated_at: new Date().toISOString(),
+    };
+
+    let error: { message: string } | null = null;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await supabase.from("orders").update(payload).eq("id", orderId);
+      error = result.error;
+
+      const missingColumn = getMissingColumn(error?.message);
+      if (!missingColumn) break;
+
+      delete payload[missingColumn];
+    }
+
+    return error;
+  }
+
   async function uploadPaymentProof(order: Order, file: File | undefined) {
     if (!file || !userId || uploadingId) return;
 
@@ -289,11 +315,14 @@ export default function OrdersPage() {
     });
 
     if (rpcResult.error) {
-      await supabase.storage.from("payment-proofs").remove([path]);
-      setMessageType("error");
-      setMessage(`Bukti berhasil diupload, tetapi gagal disimpan ke database: ${rpcResult.error.message}`);
-      setUploadingId("");
-      return;
+      const directError = await savePaymentProofDirectly(order.id, data.publicUrl);
+      if (directError) {
+        await supabase.storage.from("payment-proofs").remove([path]);
+        setMessageType("error");
+        setMessage(`Bukti berhasil diupload, tetapi gagal disimpan ke database: ${directError.message || rpcResult.error.message}`);
+        setUploadingId("");
+        return;
+      }
     }
 
     const { data: refreshedOrder, error: refreshError } = await supabase
