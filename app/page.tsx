@@ -44,6 +44,14 @@ type SiteSettings = {
   welcome_description: string;
 };
 
+type PaymentSettings = {
+  bank_name: string;
+  account_number: string;
+  account_holder: string;
+  payment_logo_url: string;
+  payment_note: string;
+};
+
 type FooterSettings = {
   store_name: string;
   address: string;
@@ -57,6 +65,14 @@ const defaultSiteSettings: SiteSettings = {
   store_name: "Tokoku",
   welcome_template: "{greeting}, {name}",
   welcome_description: "Pilih koleksi favorit, masukkan ke keranjang, lalu upload bukti transfer saat checkout.",
+};
+
+const defaultPaymentSettings: PaymentSettings = {
+  bank_name: "",
+  account_number: "",
+  account_holder: "",
+  payment_logo_url: "",
+  payment_note: "Pembayaran resmi hanya dilakukan melalui rekening yang tertera di bawah ini. Di luar rekening tersebut, toko tidak bertanggung jawab atas transaksi yang terjadi. Mohon periksa kembali sebelum melakukan transfer.",
 };
 
 const defaultFooterSettings: FooterSettings = {
@@ -326,6 +342,7 @@ function CheckoutPanel({
   confirming,
   checkoutError,
   submitting,
+  paymentSettings,
   onClose,
   onBackToCart,
   onChange,
@@ -339,6 +356,7 @@ function CheckoutPanel({
   confirming: boolean;
   checkoutError: string;
   submitting: boolean;
+  paymentSettings: PaymentSettings;
   onClose: () => void;
   onBackToCart: () => void;
   onChange: (name: keyof CheckoutForm, value: string) => void;
@@ -397,6 +415,31 @@ function CheckoutPanel({
               <span className="font-bold text-slate-700">Total Produk</span>
               <strong>Rp {subtotal.toLocaleString("id-ID")}</strong>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Rekening Pembayaran Resmi</p>
+                <h3 className="mt-2 text-lg font-bold">{paymentSettings.bank_name || "Bank belum diatur"}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Nomor rekening: <span className="font-bold text-slate-950">{paymentSettings.account_number || "-"}</span>
+                </p>
+                <p className="text-sm text-slate-600">
+                  Atas nama: <span className="font-bold text-slate-950">{paymentSettings.account_holder || "-"}</span>
+                </p>
+              </div>
+              {paymentSettings.payment_logo_url && (
+                <img
+                  src={paymentSettings.payment_logo_url}
+                  alt={paymentSettings.bank_name || "Logo pembayaran"}
+                  className="h-14 w-24 rounded-md border border-slate-100 object-contain p-2"
+                />
+              )}
+            </div>
+            <p className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-800">
+              {paymentSettings.payment_note || defaultPaymentSettings.payment_note}
+            </p>
           </div>
 
           {checkoutError && (
@@ -533,6 +576,7 @@ export default function Home() {
   const [submittingCheckout, setSubmittingCheckout] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSiteSettings);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>({
     name: "",
@@ -605,12 +649,14 @@ export default function Home() {
 
   useEffect(() => {
     async function loadCustomSettings() {
-      const [siteResult, footerResult] = await Promise.all([
+      const [siteResult, paymentResult, footerResult] = await Promise.all([
         supabase.from("site_settings").select("store_name,welcome_template,welcome_description").eq("id", true).maybeSingle(),
+        supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
         supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
       ]);
 
       if (siteResult.data) setSiteSettings({ ...defaultSiteSettings, ...siteResult.data });
+      if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
     }
 
@@ -737,7 +783,7 @@ export default function Home() {
       .single();
 
     if (orderError || !order) {
-      setCheckoutError(orderError?.message || "Gagal membuat pesanan.");
+      setCheckoutError(`Gagal membuat pesanan: ${orderError?.message || "database belum menerima data pesanan."}`);
       setSubmittingCheckout(false);
       setConfirmingCheckout(false);
       return;
@@ -756,7 +802,7 @@ export default function Home() {
 
     if (itemsError) {
       await supabase.from("orders").delete().eq("id", order.id);
-      setCheckoutError(itemsError.message);
+      setCheckoutError(`Gagal menyimpan detail produk: ${itemsError.message}`);
       setSubmittingCheckout(false);
       setConfirmingCheckout(false);
       return;
@@ -922,6 +968,7 @@ export default function Home() {
           confirming={confirmingCheckout}
           checkoutError={checkoutError}
           submitting={submittingCheckout}
+          paymentSettings={paymentSettings}
           onClose={closeCheckout}
           onBackToCart={() => {
             setCheckoutOpen(false);
