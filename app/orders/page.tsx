@@ -174,7 +174,14 @@ function orderMaps(order: Order) {
 }
 
 function orderProof(order: Order) {
-  return firstText(order.payment_proof_url, order.bukti_pembayaran);
+  return firstText(
+    order.payment_proof_url,
+    order.bukti_pembayaran,
+    order["bukti_transfer"],
+    order["proof_url"],
+    order["payment_receipt_url"],
+    order["receipt_url"],
+  );
 }
 
 function trackingNumber(order: Order) {
@@ -273,7 +280,9 @@ export default function OrdersPage() {
     }
 
     const { data } = supabase.storage.from("payment-proofs").getPublicUrl(path);
-    const previousProof = orderProof(order);
+    const { data: latestOrderData } = await supabase.from("orders").select("*").eq("id", order.id).maybeSingle();
+    const latestOrder = latestOrderData as Order | null;
+    const previousProof = orderProof(latestOrder || order);
     const rpcResult = await supabase.rpc("customer_upload_payment_proof", {
       order_id_to_update: order.id,
       proof_url: data.publicUrl,
@@ -310,9 +319,7 @@ export default function OrdersPage() {
       return;
     }
 
-    setOrders((current) =>
-      current.map((item) => (item.id === order.id ? { ...item, ...updatedOrder } : item)),
-    );
+    setOrders((current) => current.map((item) => (item.id === order.id ? { ...item, ...updatedOrder } : item)));
     const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
     if (previousPath) {
       await supabase.storage.from("payment-proofs").remove([previousPath]);
@@ -429,6 +436,26 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
+                    {proof && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-emerald-950">Bukti Pembayaran</h3>
+                            <p className="mt-1 text-sm leading-6 text-emerald-800">
+                              Bukti pembayaran sudah tersimpan. Jika foto salah, upload file baru untuk mengganti bukti lama.
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>
+                        </div>
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-emerald-100 bg-white">
+                          <img src={proof} alt="Bukti pembayaran" className="max-h-72 w-full object-contain" />
+                        </a>
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
+                          Lihat file penuh
+                        </a>
+                      </div>
+                    )}
+
                     {status === "menunggu_ongkir" && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                         Admin sedang menentukan ongkir. Upload bukti pembayaran akan aktif setelah ongkir disimpan.
@@ -450,24 +477,16 @@ export default function OrdersPage() {
                         <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
                           {paymentSettings.payment_note || officialPaymentWarning}
                         </p>
-                        {proof && (
-                          <div className="mt-3 rounded-md bg-white p-3">
-                            <p className="text-sm font-bold text-sky-800">Bukti pembayaran sudah dikirim</p>
-                            <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-sky-100 bg-slate-50">
-                              <img src={proof} alt="Bukti pembayaran" className="max-h-72 w-full object-contain" />
-                            </a>
-                            <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-sky-600 px-4 py-2 text-sm font-bold text-white">
-                              Lihat file penuh
-                            </a>
-                          </div>
-                        )}
                         <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
                           {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
                           <input
                             type="file"
                             accept="image/*"
                             disabled={uploadingId === order.id}
-                            onChange={(event) => uploadPaymentProof(order, event.target.files?.[0])}
+                            onChange={async (event) => {
+                              await uploadPaymentProof(order, event.target.files?.[0]);
+                              event.currentTarget.value = "";
+                            }}
                             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
                           />
                         </label>

@@ -175,7 +175,14 @@ function orderMaps(order: Order) {
 }
 
 function orderProof(order: Order) {
-  return firstText(order.payment_proof_url, order.bukti_pembayaran);
+  return firstText(
+    order.payment_proof_url,
+    order.bukti_pembayaran,
+    order["bukti_transfer"],
+    order["proof_url"],
+    order["payment_receipt_url"],
+    order["receipt_url"],
+  );
 }
 
 function trackingNumber(order: Order) {
