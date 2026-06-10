@@ -193,10 +193,6 @@ function trackingUrl(order: Order) {
   return firstText(order.tracking_url, order.link_tracking);
 }
 
-function getMissingColumn(errorMessage: string | undefined) {
-  return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
-}
-
 function getPaymentProofPath(publicUrl: string) {
   const marker = "/payment-proofs/";
   const index = publicUrl.indexOf(marker);
@@ -211,6 +207,7 @@ export default function OrdersPage() {
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [uploadingId, setUploadingId] = useState("");
 
   useEffect(() => {
@@ -226,12 +223,19 @@ export default function OrdersPage() {
       setUserId(user.id);
 
       const [ordersResult, paymentResult] = await Promise.all([
-        supabase.from("orders").select("*, order_items(*)").eq("customer_id", user.id).order("created_at", { ascending: false }),
+        supabase
+          .from("orders")
+          .select("*, order_items(*)")
+          .or(`customer_id.eq.${user.id},user_id.eq.${user.id}`)
+          .order("created_at", { ascending: false }),
         supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
       ]);
 
       if (ordersResult.error?.message.includes("customer_id")) {
         const fallbackOrders = await supabase.from("orders").select("*, order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
+        if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
+      } else if (ordersResult.error?.message.includes("user_id")) {
+        const fallbackOrders = await supabase.from("orders").select("*, order_items(*)").eq("customer_id", user.id).order("created_at", { ascending: false });
         if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
       } else if (ordersResult.data) {
         setOrders(ordersResult.data as Order[]);
@@ -240,6 +244,7 @@ export default function OrdersPage() {
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       const checkoutSuccess = window.sessionStorage.getItem("checkout_success");
       if (checkoutSuccess) {
+        setMessageType("success");
         setMessage(checkoutSuccess);
         window.sessionStorage.removeItem("checkout_success");
       }
@@ -249,29 +254,11 @@ export default function OrdersPage() {
     loadData();
   }, [router]);
 
-  async function updateOrder(orderId: string, payload: Row) {
-    const adaptivePayload = { ...payload };
-    let error: { message: string } | null = null;
-    let data = null as Order | null;
-
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId).select("*").maybeSingle();
-      error = result.error;
-      data = result.data as Order | null;
-
-      const missingColumn = getMissingColumn(error?.message);
-      if (!missingColumn) break;
-
-      delete adaptivePayload[missingColumn];
-    }
-
-    return { error, data };
-  }
-
   async function uploadPaymentProof(order: Order, file: File | undefined) {
     if (!file || !userId || uploadingId) return;
 
     setMessage("");
+    setMessageType("success");
     setUploadingId(order.id);
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -279,6 +266,7 @@ export default function OrdersPage() {
     const { error: uploadError } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: false });
 
     if (uploadError) {
+      setMessageType("error");
       setMessage(uploadError.message);
       setUploadingId("");
       return;
@@ -286,40 +274,38 @@ export default function OrdersPage() {
 
     const { data } = supabase.storage.from("payment-proofs").getPublicUrl(path);
     const previousProof = orderProof(order);
-    let updateError = null as { message: string } | null;
-
     const rpcResult = await supabase.rpc("customer_upload_payment_proof", {
       order_id_to_update: order.id,
       proof_url: data.publicUrl,
     });
 
-    updateError = rpcResult.error;
-
-    let updatedOrder = null as Order | null;
-
-    if (updateError) {
-      const updateResult = await updateOrder(order.id, {
-        payment_proof_url: data.publicUrl,
-        bukti_pembayaran: data.publicUrl,
-        updated_at: new Date().toISOString(),
-      });
-      updateError = updateResult.error;
-      updatedOrder = updateResult.data;
-    }
-
-    if (updateError) {
-      setMessage(updateError.message);
+    if (rpcResult.error) {
+      await supabase.storage.from("payment-proofs").remove([path]);
+      setMessageType("error");
+      setMessage(`Bukti berhasil diupload, tetapi gagal disimpan ke database: ${rpcResult.error.message}`);
       setUploadingId("");
       return;
     }
 
-    if (!updatedOrder) {
-      const { data: refreshedOrder } = await supabase.from("orders").select("*").eq("id", order.id).maybeSingle();
-      updatedOrder = refreshedOrder as Order | null;
+    const { data: refreshedOrder, error: refreshError } = await supabase
+      .from("orders")
+      .select("*, order_items(*)")
+      .eq("id", order.id)
+      .maybeSingle();
+
+    const updatedOrder = refreshedOrder as Order | null;
+
+    if (refreshError) {
+      setMessageType("error");
+      setMessage(`Bukti sudah dikirim, tetapi pesanan gagal dimuat ulang: ${refreshError.message}`);
+      setUploadingId("");
+      return;
     }
 
     if (!updatedOrder || !orderProof(updatedOrder)) {
-      setMessage("Bukti berhasil diupload ke storage, tetapi belum tersimpan ke pesanan. Jalankan SQL order-workflow terbaru di Supabase lalu upload ulang.");
+      await supabase.storage.from("payment-proofs").remove([path]);
+      setMessageType("error");
+      setMessage("Bukti berhasil diupload ke storage, tetapi belum tersimpan ke database orders. Jalankan SQL order-workflow terbaru di Supabase lalu upload ulang.");
       setUploadingId("");
       return;
     }
@@ -332,6 +318,7 @@ export default function OrdersPage() {
       await supabase.storage.from("payment-proofs").remove([previousPath]);
     }
 
+    setMessageType("success");
     setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
     setUploadingId("");
   }
@@ -367,7 +354,11 @@ export default function OrdersPage() {
 
       <section className="mx-auto max-w-6xl px-5 py-8">
         {message && (
-          <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          <div className={`mb-5 rounded-lg border px-4 py-3 text-sm font-medium ${
+            messageType === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}>
             {message}
           </div>
         )}

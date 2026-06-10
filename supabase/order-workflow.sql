@@ -150,12 +150,16 @@ with check (
   )
 );
 
+drop function if exists public.customer_upload_payment_proof(uuid, text);
+
 create or replace function public.customer_upload_payment_proof(order_id_to_update uuid, proof_url text)
-returns void
+returns text
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  affected_count int;
 begin
   update public.orders
   set payment_proof_url = proof_url,
@@ -163,18 +167,19 @@ begin
       updated_at = now()
   where id = order_id_to_update
     and coalesce(customer_id, user_id) = auth.uid()
-    and coalesce(shipping_cost, ongkir, 0) > 0
-    and (
-      status is null
-      or lower(status) in ('menunggu pembayaran', 'menunggu_pembayaran', 'pending', 'baru')
-      or lower(coalesce(status_pesanan, '')) in ('menunggu pembayaran', 'menunggu_pembayaran', 'pending', 'baru')
-    );
+    and coalesce(shipping_cost, ongkir, 0) > 0;
 
-  if not found then
-    raise exception 'Pesanan tidak ditemukan atau belum bisa upload bukti pembayaran.';
+  get diagnostics affected_count = row_count;
+
+  if affected_count = 0 then
+    raise exception 'Pesanan tidak ditemukan, bukan milik user ini, atau ongkir belum ditentukan.';
   end if;
+
+  return proof_url;
 end;
 $$;
+
+grant execute on function public.customer_upload_payment_proof(uuid, text) to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('payment-proofs', 'payment-proofs', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
