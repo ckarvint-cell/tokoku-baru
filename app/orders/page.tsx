@@ -99,7 +99,17 @@ export default function OrdersPage() {
           .maybeSingle(),
       ]);
 
-      if (ordersResult.data) setOrders(ordersResult.data as Order[]);
+      if (ordersResult.error?.message.includes("customer_id")) {
+        const fallbackOrders = await supabase
+          .from("orders")
+          .select("*, order_items(*)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
+      } else if (ordersResult.data) {
+        setOrders(ordersResult.data as Order[]);
+      }
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       setLoading(false);
     }

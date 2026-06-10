@@ -22,6 +22,7 @@ create table if not exists public.orders (
 );
 
 alter table public.orders add column if not exists customer_id uuid references auth.users(id) on delete cascade;
+alter table public.orders add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.orders add column if not exists customer_name text;
 alter table public.orders add column if not exists customer_phone text;
 alter table public.orders add column if not exists shipping_address text;
@@ -39,6 +40,12 @@ alter table public.orders add column if not exists tracking_url text;
 alter table public.orders add column if not exists paid_at timestamptz;
 alter table public.orders add column if not exists shipped_at timestamptz;
 alter table public.orders add column if not exists updated_at timestamptz not null default now();
+
+update public.orders
+set customer_id = coalesce(customer_id, user_id),
+    user_id = coalesce(user_id, customer_id)
+where customer_id is null
+   or user_id is null;
 
 alter table public.orders drop constraint if exists orders_status_check;
 alter table public.orders
@@ -80,7 +87,7 @@ drop policy if exists "Customers can read own orders" on public.orders;
 create policy "Customers can read own orders"
 on public.orders
 for select
-using (auth.uid() = customer_id);
+using (auth.uid() = coalesce(customer_id, user_id));
 
 drop policy if exists "Managers can read all orders" on public.orders;
 create policy "Managers can read all orders"
@@ -93,7 +100,7 @@ create policy "Customers can create own orders"
 on public.orders
 for insert
 with check (
-  auth.uid() = customer_id
+  auth.uid() = coalesce(customer_id, user_id)
   and status = 'Menunggu Ongkir'
   and shipping_cost = 0
   and payment_proof_url is null
@@ -116,7 +123,7 @@ using (
     select 1
     from public.orders
     where orders.id = order_items.order_id
-      and orders.customer_id = auth.uid()
+      and coalesce(orders.customer_id, orders.user_id) = auth.uid()
   )
 );
 
@@ -135,7 +142,7 @@ with check (
     select 1
     from public.orders
     where orders.id = order_items.order_id
-      and orders.customer_id = auth.uid()
+      and coalesce(orders.customer_id, orders.user_id) = auth.uid()
       and orders.status = 'Menunggu Ongkir'
   )
 );
@@ -152,7 +159,7 @@ begin
       paid_at = now(),
       updated_at = now()
   where id = order_id_to_update
-    and customer_id = auth.uid()
+    and coalesce(customer_id, user_id) = auth.uid()
     and status = 'Menunggu Pembayaran';
 
   if not found then

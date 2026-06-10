@@ -769,21 +769,39 @@ export default function Home() {
       0,
     );
 
-    const { data: order, error: orderError } = await supabase
+    const orderPayload = {
+      customer_name: checkoutForm.name,
+      customer_phone: checkoutForm.phone,
+      shipping_address: checkoutForm.address,
+      maps_url: checkoutForm.mapsUrl || null,
+      total_produk: totalProduk,
+      shipping_cost: 0,
+      grand_total: totalProduk,
+      status: "Menunggu Ongkir",
+    };
+
+    let { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
+        ...orderPayload,
         customer_id: user.id,
-        customer_name: checkoutForm.name,
-        customer_phone: checkoutForm.phone,
-        shipping_address: checkoutForm.address,
-        maps_url: checkoutForm.mapsUrl || null,
-        total_produk: totalProduk,
-        shipping_cost: 0,
-        grand_total: totalProduk,
-        status: "Menunggu Ongkir",
       })
       .select("id")
       .single();
+
+    if (orderError?.message.includes("customer_id")) {
+      const fallbackResult = await supabase
+        .from("orders")
+        .insert({
+          ...orderPayload,
+          user_id: user.id,
+        })
+        .select("id")
+        .single();
+
+      order = fallbackResult.data;
+      orderError = fallbackResult.error;
+    }
 
     if (orderError || !order) {
       setCheckoutError(`Gagal membuat pesanan: ${orderError?.message || "database belum menerima data pesanan."}`);
