@@ -61,6 +61,7 @@ type Order = Row & {
   logo_kurir?: string | null;
   tracking_url?: string | null;
   link_tracking?: string | null;
+  paid_at?: string | null;
   created_at: string;
   order_items: OrderItem[];
 };
@@ -100,15 +101,17 @@ function formatCurrency(value: number | null | undefined) {
 
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
-  if (raw.includes("ongkir")) return "menunggu_ongkir";
-  if (raw.includes("pembayaran") || raw === "pending" || raw === "baru") return "menunggu_pembayaran";
-  if (raw.includes("kirim") || raw.includes("dikirim")) return "pesanan_dikirim";
   if (raw.includes("tolak")) return "ditolak";
-  return "menunggu_ongkir";
+  if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
+  if (orderOngkir(order) <= 0) return "menunggu_ongkir";
+  return "menunggu_pembayaran";
 }
 
 function statusLabel(status: Status) {
-  return status.replaceAll("_", " ");
+  if (status === "menunggu_ongkir") return "menunggu ongkir";
+  if (status === "menunggu_pembayaran") return "menunggu pembayaran";
+  if (status === "pesanan_dikirim") return "sedang dikirim";
+  return "ditolak";
 }
 
 function statusClass(status: Status) {

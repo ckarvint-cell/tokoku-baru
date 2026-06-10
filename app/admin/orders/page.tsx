@@ -102,15 +102,17 @@ function formatCurrency(value: number | null | undefined) {
 
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
-  if (raw.includes("ongkir")) return "menunggu_ongkir";
-  if (raw.includes("pembayaran") || raw === "pending" || raw === "baru") return "menunggu_pembayaran";
-  if (raw.includes("kirim") || raw.includes("dikirim")) return "pesanan_dikirim";
   if (raw.includes("tolak")) return "ditolak";
-  return "menunggu_ongkir";
+  if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
+  if (orderOngkir(order) <= 0) return "menunggu_ongkir";
+  return "menunggu_pembayaran";
 }
 
 function statusLabel(status: Status) {
-  return status.replaceAll("_", " ");
+  if (status === "menunggu_ongkir") return "menunggu ongkir";
+  if (status === "menunggu_pembayaran") return "menunggu pembayaran";
+  if (status === "pesanan_dikirim") return "sedang dikirim";
+  return "ditolak";
 }
 
 function statusClass(status: Status) {
@@ -196,6 +198,10 @@ function getMissingColumn(errorMessage: string | undefined) {
   return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
+function isStatusConstraintError(errorMessage: string | undefined) {
+  return Boolean(errorMessage?.includes("orders_status_check"));
+}
+
 function makeDraft(order: Order): Draft {
   return {
     shippingCost: String(orderOngkir(order) || ""),
@@ -277,6 +283,14 @@ export default function AdminOrdersPage() {
       if (!missingColumn) break;
 
       delete adaptivePayload[missingColumn];
+      continue;
+    }
+
+    for (let attempt = 0; attempt < 5 && isStatusConstraintError(error?.message); attempt += 1) {
+      delete adaptivePayload.status;
+      delete adaptivePayload.status_pesanan;
+      const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+      error = result.error;
     }
 
     if (error) {

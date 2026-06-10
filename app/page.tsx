@@ -852,13 +852,13 @@ export default function Home() {
       ongkir: 0,
       grand_total: totalProduk,
       total_bayar: totalProduk,
-      status: "Menunggu Ongkir",
-      status_pesanan: "Menunggu Ongkir",
+      status: "menunggu_ongkir",
+      status_pesanan: "menunggu_ongkir",
     };
 
     let order = null as { id: string } | null;
     let orderError = null as { message: string } | null;
-    const statusFallbacks = ["pending", "Pending", "Baru", "Diproses", "Menunggu Pembayaran"];
+    const statusFallbacks = ["Menunggu Ongkir", "pending", "Pending", "Baru", "Diproses"];
     let statusFallbackIndex = 0;
     const adaptivePayload: Record<string, string | number | null> = {
       ...orderPayload,
