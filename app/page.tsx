@@ -106,6 +106,10 @@ function formatWelcome(template: string, greeting: string, name: string) {
     .replaceAll("{name}", name);
 }
 
+function getMissingColumn(errorMessage: string | undefined) {
+  return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
+}
+
 function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: (product: Product) => void }) {
   const [imageIndex, setImageIndex] = useState(0);
   const images = product.image_urls?.length ? product.image_urls : [];
@@ -770,37 +774,43 @@ export default function Home() {
     );
 
     const orderPayload = {
+      nama_penerima: checkoutForm.name,
+      nomor_whatsapp: checkoutForm.phone,
+      no_whatsapp: checkoutForm.phone,
+      alamat_pengiriman: checkoutForm.address,
+      alamat: checkoutForm.address,
+      total_harga: totalProduk,
+      total: totalProduk,
       customer_name: checkoutForm.name,
       customer_phone: checkoutForm.phone,
       shipping_address: checkoutForm.address,
       maps_url: checkoutForm.mapsUrl || null,
       total_produk: totalProduk,
       shipping_cost: 0,
+      ongkir: 0,
       grand_total: totalProduk,
+      total_bayar: totalProduk,
       status: "Menunggu Ongkir",
+      status_pesanan: "Menunggu Ongkir",
     };
 
-    let { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        ...orderPayload,
-        customer_id: user.id,
-      })
-      .select("id")
-      .single();
+    let order = null as { id: string } | null;
+    let orderError = null as { message: string } | null;
+    const adaptivePayload: Record<string, string | number | null> = {
+      ...orderPayload,
+      customer_id: user.id,
+      user_id: user.id,
+    };
 
-    if (orderError?.message.includes("customer_id")) {
-      const fallbackResult = await supabase
-        .from("orders")
-        .insert({
-          ...orderPayload,
-          user_id: user.id,
-        })
-        .select("id")
-        .single();
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const result = await supabase.from("orders").insert(adaptivePayload).select("id").single();
+      order = result.data;
+      orderError = result.error;
 
-      order = fallbackResult.data;
-      orderError = fallbackResult.error;
+      const missingColumn = getMissingColumn(orderError?.message);
+      if (!missingColumn) break;
+
+      delete adaptivePayload[missingColumn];
     }
 
     if (orderError || !order) {
@@ -810,7 +820,7 @@ export default function Home() {
       return;
     }
 
-    const orderItems = cart.map((item) => ({
+    let orderItems = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
       nama_produk: item.nama_produk,
@@ -819,7 +829,21 @@ export default function Home() {
       note: item.note || null,
     }));
 
-    const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+    let itemsError = null as { message: string } | null;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const result = await supabase.from("order_items").insert(orderItems);
+      itemsError = result.error;
+
+      const missingColumn = getMissingColumn(itemsError?.message);
+      if (!missingColumn) break;
+
+      orderItems = orderItems.map((item) => {
+        const nextItem = { ...item } as Record<string, string | number | null>;
+        delete nextItem[missingColumn];
+        return nextItem as typeof item;
+      });
+    }
 
     if (itemsError) {
       await supabase.from("orders").delete().eq("id", order.id);
