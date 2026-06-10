@@ -39,6 +39,52 @@ type CheckoutForm = {
   proofName: string;
 };
 
+type SiteSettings = {
+  store_name: string;
+  welcome_template: string;
+  welcome_description: string;
+};
+
+type PaymentSettings = {
+  bank_name: string;
+  account_number: string;
+  account_holder: string;
+  payment_logo_url: string;
+  payment_note: string;
+};
+
+type FooterSettings = {
+  store_name: string;
+  address: string;
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  copyright_text: string;
+};
+
+const defaultSiteSettings: SiteSettings = {
+  store_name: "Tokoku",
+  welcome_template: "{greeting}, {name}",
+  welcome_description: "Pilih koleksi favorit, masukkan ke keranjang, lalu upload bukti transfer saat checkout.",
+};
+
+const defaultPaymentSettings: PaymentSettings = {
+  bank_name: "",
+  account_number: "",
+  account_holder: "",
+  payment_logo_url: "",
+  payment_note: "Transfer sesuai subtotal lalu upload bukti transfer.",
+};
+
+const defaultFooterSettings: FooterSettings = {
+  store_name: "Tokoku",
+  address: "",
+  whatsapp: "",
+  email: "",
+  instagram: "",
+  copyright_text: "© Tokoku. All rights reserved.",
+};
+
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 11) return "Selamat Pagi";
@@ -50,6 +96,12 @@ function getGreeting() {
 function getDiscountedPrice(price: number, discountPercent: number | null) {
   if (!discountPercent) return price;
   return price - price * (discountPercent / 100);
+}
+
+function formatWelcome(template: string, greeting: string, name: string) {
+  return (template || defaultSiteSettings.welcome_template)
+    .replaceAll("{greeting}", greeting)
+    .replaceAll("{name}", name);
 }
 
 function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: (product: Product) => void }) {
@@ -296,6 +348,7 @@ function CheckoutPanel({
   onSubmit,
   onConfirm,
   onCancelConfirm,
+  paymentSettings,
 }: {
   cart: CartItem[];
   form: CheckoutForm;
@@ -307,6 +360,7 @@ function CheckoutPanel({
   onSubmit: () => void;
   onConfirm: () => void;
   onCancelConfirm: () => void;
+  paymentSettings: PaymentSettings;
 }) {
   const subtotal = cart.reduce((total, item) => total + getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty, 0);
   const totalQty = cart.reduce((total, item) => total + item.qty, 0);
@@ -348,6 +402,29 @@ function CheckoutPanel({
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Pembayaran</p>
+                <h3 className="mt-1 text-lg font-bold">{paymentSettings.bank_name || "Bank belum diatur"}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  No. Rekening: <span className="font-bold text-slate-950">{paymentSettings.account_number || "-"}</span>
+                </p>
+                <p className="text-sm text-slate-600">
+                  Atas Nama: <span className="font-bold text-slate-950">{paymentSettings.account_holder || "-"}</span>
+                </p>
+              </div>
+              {paymentSettings.payment_logo_url && (
+                <img
+                  src={paymentSettings.payment_logo_url}
+                  alt={paymentSettings.bank_name || "Logo pembayaran"}
+                  className="h-14 w-24 rounded-md border border-slate-100 object-contain p-2"
+                />
+              )}
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-500">{paymentSettings.payment_note || defaultPaymentSettings.payment_note}</p>
           </div>
 
           {confirming ? (
@@ -477,6 +554,9 @@ export default function Home() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSiteSettings);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
+  const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>({
     name: "",
     phone: "",
@@ -545,6 +625,22 @@ export default function Home() {
     }
 
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    async function loadCustomSettings() {
+      const [siteResult, paymentResult, footerResult] = await Promise.all([
+        supabase.from("site_settings").select("store_name,welcome_template,welcome_description").eq("id", true).maybeSingle(),
+        supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
+        supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
+      ]);
+
+      if (siteResult.data) setSiteSettings({ ...defaultSiteSettings, ...siteResult.data });
+      if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
+      if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
+    }
+
+    loadCustomSettings();
   }, []);
 
   async function logout() {
@@ -636,13 +732,14 @@ export default function Home() {
 
   const name = profile?.full_name || "Pengunjung";
   const cartQty = cart.reduce((total, item) => total + item.qty, 0);
+  const welcomeText = formatWelcome(siteSettings.welcome_template, getGreeting(), name);
 
   return (
     <main className="min-h-screen bg-[#fbf7f4] text-slate-950">
       <header className="border-b border-rose-100 bg-white/90">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">Tokoku</p>
+            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">{siteSettings.store_name || footerSettings.store_name || "Tokoku"}</p>
             <h1 className="mt-1 text-2xl font-bold">Katalog Produk</h1>
           </div>
           <nav className="flex flex-wrap gap-2">
@@ -703,12 +800,9 @@ export default function Home() {
                 year: "numeric",
               })}
             </p>
-            <h2 className="mt-4 text-3xl font-bold md:text-4xl">
-              {getGreeting()}, {name}
-            </h2>
+            <h2 className="mt-4 text-3xl font-bold md:text-4xl">{welcomeText}</h2>
             <p className="mt-4 max-w-2xl text-slate-600">
-              Website toko online baru sudah terhubung ke Supabase. Berikutnya kita akan isi produk,
-              keranjang, checkout, dan dashboard admin.
+              {siteSettings.welcome_description || defaultSiteSettings.welcome_description}
             </p>
           </div>
           <div className="flex items-center justify-center rounded-lg bg-rose-50 p-6">
@@ -744,6 +838,28 @@ export default function Home() {
         </section>
       </section>
 
+      <footer className="border-t border-rose-100 bg-white">
+        <div className="mx-auto grid max-w-6xl gap-5 px-5 py-8 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.35em] text-rose-500">{footerSettings.store_name || siteSettings.store_name || "Tokoku"}</p>
+            <p className="mt-3 leading-6">{footerSettings.address || "Alamat toko belum diatur."}</p>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-950">Kontak</h3>
+            <p className="mt-3">WhatsApp: {footerSettings.whatsapp || "-"}</p>
+            <p className="mt-2">Email: {footerSettings.email || "-"}</p>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-950">Sosial Media</h3>
+            <p className="mt-3">{footerSettings.instagram || "-"}</p>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-950">Copyright</h3>
+            <p className="mt-3 leading-6">{footerSettings.copyright_text || defaultFooterSettings.copyright_text}</p>
+          </div>
+        </div>
+      </footer>
+
       {cartOpen && (
         <CartPanel
           cart={cart}
@@ -772,6 +888,7 @@ export default function Home() {
           onSubmit={submitCheckoutForm}
           onConfirm={confirmCheckout}
           onCancelConfirm={() => setConfirmingCheckout(false)}
+          paymentSettings={paymentSettings}
         />
       )}
     </main>
