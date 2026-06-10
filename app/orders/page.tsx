@@ -122,7 +122,7 @@ function statusClass(status: Status) {
 }
 
 function itemName(item: OrderItem) {
-  return firstText(item.nama_produk, item.product_name, item.name) || "Produk";
+  return (firstText(item.nama_produk, item.product_name, item.name) || "Produk").split(" ||CATATAN:")[0];
 }
 
 function itemQty(item: OrderItem) {
@@ -142,7 +142,11 @@ function itemSubtotal(item: OrderItem) {
 }
 
 function itemNote(item: OrderItem) {
-  return firstText(item.note, item.catatan, item["catatan_produk"], item["item_note"], item["keterangan"]);
+  const explicitNote = firstText(item.note, item.catatan, item["catatan_produk"], item["item_note"], item["keterangan"]);
+  if (explicitNote) return explicitNote;
+
+  const nameWithFallback = firstText(item.nama_produk, item.product_name, item.name);
+  return nameWithFallback.includes(" ||CATATAN:") ? nameWithFallback.split(" ||CATATAN:").slice(1).join(" ||CATATAN:") : "";
 }
 
 function orderItemsTotal(order: Order) {

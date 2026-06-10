@@ -161,6 +161,12 @@ function getOrderItemFallbackValue(column: string, item: CartItem) {
   return "";
 }
 
+function attachItemNoteFallback(name: string, note: string) {
+  const cleanNote = note.trim();
+  if (name.includes("||CATATAN:")) return name;
+  return cleanNote ? `${name} ||CATATAN:${cleanNote}` : name;
+}
+
 function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: (product: Product) => void }) {
   const [imageIndex, setImageIndex] = useState(0);
   const images = product.image_urls?.length ? product.image_urls : [];
@@ -927,6 +933,7 @@ export default function Home() {
     }));
 
     let itemsError = null as { message: string } | null;
+    const noteColumns = ["note", "catatan", "catatan_produk", "item_note", "keterangan"];
 
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const result = await supabase.from("order_items").insert(orderItems);
@@ -939,6 +946,20 @@ export default function Home() {
           delete nextItem[missingColumn];
           return nextItem as typeof item;
         });
+
+        const noteColumnsLeft = noteColumns.some((column) => Object.prototype.hasOwnProperty.call(orderItems[0] || {}, column));
+        if (!noteColumnsLeft) {
+          orderItems = orderItems.map((item, index) => {
+            const note = cart[index]?.note?.trim() || "";
+            if (!note) return item;
+
+            return {
+              ...item,
+              nama_produk: attachItemNoteFallback(String(item.nama_produk || cart[index].nama_produk), note),
+              product_name: attachItemNoteFallback(String(item.product_name || cart[index].nama_produk), note),
+            };
+          });
+        }
         continue;
       }
 
