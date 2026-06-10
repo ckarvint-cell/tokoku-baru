@@ -74,6 +74,12 @@ type PaymentSettings = {
   payment_note: string;
 };
 
+type StoredPaymentProof = {
+  name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 const defaultPaymentSettings: PaymentSettings = {
   bank_name: "",
   account_number: "",
@@ -229,6 +235,56 @@ function getMissingColumn(errorMessage: string | undefined) {
   return errorMessage?.match(/Could not find the '([^']+)' column/)?.[1] || "";
 }
 
+function paymentProofUrlFromPath(path: string) {
+  return supabase.storage.from("payment-proofs").getPublicUrl(path).data.publicUrl;
+}
+
+async function listStoredPaymentProofs(customerId: string, orderId: string) {
+  const { data, error } = await supabase.storage.from("payment-proofs").list(customerId, {
+    limit: 100,
+    sortBy: { column: "created_at", order: "desc" },
+  });
+
+  if (error || !data) return [];
+
+  return (data as StoredPaymentProof[])
+    .filter((file) => file.name.startsWith(`${orderId}-`))
+    .sort((left, right) => {
+      const leftTime = new Date(left.created_at || left.updated_at || 0).getTime();
+      const rightTime = new Date(right.created_at || right.updated_at || 0).getTime();
+      return rightTime - leftTime;
+    })
+    .map((file) => `${customerId}/${file.name}`);
+}
+
+async function hydrateOrdersWithStoredProofs(rawOrders: Order[], customerId: string) {
+  const { data, error } = await supabase.storage.from("payment-proofs").list(customerId, {
+    limit: 100,
+    sortBy: { column: "created_at", order: "desc" },
+  });
+
+  if (error || !data) return rawOrders;
+
+  const files = data as StoredPaymentProof[];
+
+  return rawOrders.map((order) => {
+    if (orderProof(order)) return order;
+
+    const newestFile = files
+      .filter((file) => file.name.startsWith(`${order.id}-`))
+      .sort((left, right) => {
+        const leftTime = new Date(left.created_at || left.updated_at || 0).getTime();
+        const rightTime = new Date(right.created_at || right.updated_at || 0).getTime();
+        return rightTime - leftTime;
+      })[0];
+
+    if (!newestFile) return order;
+
+    const publicUrl = paymentProofUrlFromPath(`${customerId}/${newestFile.name}`);
+    return { ...order, payment_proof_url: publicUrl, bukti_pembayaran: publicUrl };
+  });
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -238,6 +294,17 @@ export default function OrdersPage() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [uploadingId, setUploadingId] = useState("");
+
+  async function removeOldPaymentProofs(orderId: string, keepPath: string, previousProof: string) {
+    const storedPaths = await listStoredPaymentProofs(userId, orderId);
+    const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
+    const uniquePaths = Array.from(new Set([...storedPaths, previousPath].filter(Boolean)));
+    const pathsToRemove = uniquePaths.filter((storedPath) => storedPath !== keepPath);
+
+    if (pathsToRemove.length > 0) {
+      await supabase.storage.from("payment-proofs").remove(pathsToRemove);
+    }
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -262,12 +329,12 @@ export default function OrdersPage() {
 
       if (ordersResult.error?.message.includes("customer_id")) {
         const fallbackOrders = await supabase.from("orders").select("*, order_items(*)").eq("user_id", user.id).order("created_at", { ascending: false });
-        if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
+        if (fallbackOrders.data) setOrders(await hydrateOrdersWithStoredProofs(fallbackOrders.data as Order[], user.id));
       } else if (ordersResult.error?.message.includes("user_id")) {
         const fallbackOrders = await supabase.from("orders").select("*, order_items(*)").eq("customer_id", user.id).order("created_at", { ascending: false });
-        if (fallbackOrders.data) setOrders(fallbackOrders.data as Order[]);
+        if (fallbackOrders.data) setOrders(await hydrateOrdersWithStoredProofs(fallbackOrders.data as Order[], user.id));
       } else if (ordersResult.data) {
-        setOrders(ordersResult.data as Order[]);
+        setOrders(await hydrateOrdersWithStoredProofs(ordersResult.data as Order[], user.id));
       }
 
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
@@ -351,10 +418,7 @@ export default function OrdersPage() {
       if (directResult.savedOrder && orderProof(directResult.savedOrder)) {
         const updatedOrder = { ...order, ...directResult.savedOrder, order_items: order.order_items };
         setOrders((current) => current.map((item) => (item.id === order.id ? updatedOrder : item)));
-        const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
-        if (previousPath) {
-          await supabase.storage.from("payment-proofs").remove([previousPath]);
-        }
+        await removeOldPaymentProofs(order.id, path, previousProof);
         setMessageType("success");
         setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
         setUploadingId("");
@@ -384,17 +448,15 @@ export default function OrdersPage() {
         bukti_pembayaran: data.publicUrl,
       };
       setOrders((current) => current.map((item) => (item.id === order.id ? fallbackOrder : item)));
+      await removeOldPaymentProofs(order.id, path, previousProof);
       setMessageType("success");
-      setMessage("Bukti pembayaran berhasil diupload dan ditampilkan. Jika setelah refresh hilang, berarti kolom bukti pembayaran di Supabase belum cocok dengan frontend.");
+      setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
       setUploadingId("");
       return;
     }
 
     setOrders((current) => current.map((item) => (item.id === order.id ? { ...item, ...updatedOrder } : item)));
-    const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
-    if (previousPath) {
-      await supabase.storage.from("payment-proofs").remove([previousPath]);
-    }
+    await removeOldPaymentProofs(order.id, path, previousProof);
 
     setMessageType("success");
     setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
@@ -513,16 +575,13 @@ export default function OrdersPage() {
                           <div>
                             <h3 className="font-bold text-emerald-950">Bukti Pembayaran</h3>
                             <p className="mt-1 text-sm leading-6 text-emerald-800">
-                              Bukti pembayaran sudah tersimpan. Jika foto salah, upload file baru untuk mengganti bukti lama.
+                              Bukti pembayaran sudah tersimpan. Klik gambar untuk melihat ukuran penuh.
                             </p>
                           </div>
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>
                         </div>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-emerald-100 bg-white">
-                          <img src={proof} alt="Bukti pembayaran" className="max-h-72 w-full object-contain" />
-                        </a>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
-                          Lihat file penuh
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block w-32 overflow-hidden rounded-md border border-emerald-100 bg-white sm:w-40">
+                          <img src={proof} alt="Bukti pembayaran" className="h-32 w-full object-contain sm:h-40" />
                         </a>
                       </div>
                     )}
