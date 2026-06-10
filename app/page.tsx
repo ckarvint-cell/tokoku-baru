@@ -114,6 +114,10 @@ function getRequiredColumn(errorMessage: string | undefined) {
   return errorMessage?.match(/null value in column "([^"]+)"/)?.[1] || "";
 }
 
+function isStatusConstraintError(errorMessage: string | undefined) {
+  return Boolean(errorMessage?.includes("orders_status_check"));
+}
+
 function getOrderFallbackValue(column: string, userId: string, email: string, form: CheckoutForm, totalProduk: number) {
   const normalized = column.toLowerCase();
 
@@ -132,6 +136,26 @@ function getOrderFallbackValue(column: string, userId: string, email: string, fo
   if (normalized.includes("ongkir") || normalized.includes("shipping")) return 0;
   if (normalized.includes("total") || normalized.includes("harga") || normalized.includes("bayar") || normalized.includes("grand")) return totalProduk;
   if (normalized.includes("status")) return "Menunggu Ongkir";
+  if (normalized.includes("tanggal") || normalized.includes("date") || normalized.includes("time")) return new Date().toISOString();
+
+  return "";
+}
+
+function getOrderItemFallbackValue(column: string, item: CartItem) {
+  const normalized = column.toLowerCase();
+  const price = getDiscountedPrice(Number(item.harga), item.harga_diskon);
+  const subtotal = price * item.qty;
+
+  if (normalized === "id") return crypto.randomUUID();
+  if (normalized.includes("produk") || normalized.includes("product")) {
+    if (normalized.includes("nama") || normalized.includes("name")) return item.nama_produk;
+    return item.id;
+  }
+  if (normalized.includes("nama") || normalized.includes("name")) return item.nama_produk;
+  if (normalized.includes("qty") || normalized.includes("jumlah")) return item.qty;
+  if (normalized.includes("harga") || normalized.includes("price")) return price;
+  if (normalized.includes("subtotal") || normalized.includes("total")) return subtotal;
+  if (normalized.includes("note") || normalized.includes("catatan")) return item.note || "";
   if (normalized.includes("tanggal") || normalized.includes("date") || normalized.includes("time")) return new Date().toISOString();
 
   return "";
@@ -834,6 +858,8 @@ export default function Home() {
 
     let order = null as { id: string } | null;
     let orderError = null as { message: string } | null;
+    const statusFallbacks = ["pending", "Pending", "Baru", "Diproses", "Menunggu Pembayaran"];
+    let statusFallbackIndex = 0;
     const adaptivePayload: Record<string, string | number | null> = {
       ...orderPayload,
       customer_id: user.id,
@@ -848,6 +874,21 @@ export default function Home() {
       const missingColumn = getMissingColumn(orderError?.message);
       if (missingColumn) {
         delete adaptivePayload[missingColumn];
+        continue;
+      }
+
+      if (isStatusConstraintError(orderError?.message)) {
+        const nextStatus = statusFallbacks[statusFallbackIndex];
+        statusFallbackIndex += 1;
+
+        if (nextStatus) {
+          adaptivePayload.status = nextStatus;
+          adaptivePayload.status_pesanan = nextStatus;
+        } else {
+          delete adaptivePayload.status;
+          delete adaptivePayload.status_pesanan;
+        }
+
         continue;
       }
 
@@ -870,26 +911,44 @@ export default function Home() {
     let orderItems = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
+      produk_id: item.id,
       nama_produk: item.nama_produk,
+      product_name: item.nama_produk,
       harga: getDiscountedPrice(Number(item.harga), item.harga_diskon),
+      price: getDiscountedPrice(Number(item.harga), item.harga_diskon),
       qty: item.qty,
+      jumlah: item.qty,
+      subtotal: getDiscountedPrice(Number(item.harga), item.harga_diskon) * item.qty,
       note: item.note || null,
+      catatan: item.note || null,
     }));
 
     let itemsError = null as { message: string } | null;
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
       const result = await supabase.from("order_items").insert(orderItems);
       itemsError = result.error;
 
       const missingColumn = getMissingColumn(itemsError?.message);
-      if (!missingColumn) break;
+      if (missingColumn) {
+        orderItems = orderItems.map((item) => {
+          const nextItem = { ...item } as Record<string, string | number | null>;
+          delete nextItem[missingColumn];
+          return nextItem as typeof item;
+        });
+        continue;
+      }
 
-      orderItems = orderItems.map((item) => {
-        const nextItem = { ...item } as Record<string, string | number | null>;
-        delete nextItem[missingColumn];
-        return nextItem as typeof item;
-      });
+      const requiredColumn = getRequiredColumn(itemsError?.message);
+      if (requiredColumn) {
+        orderItems = orderItems.map((item, index) => ({
+          ...item,
+          [requiredColumn]: getOrderItemFallbackValue(requiredColumn, cart[index]),
+        }));
+        continue;
+      }
+
+      break;
     }
 
     if (itemsError) {
