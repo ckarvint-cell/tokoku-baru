@@ -35,6 +35,10 @@ alter table public.orders add column if not exists status text not null default 
 alter table public.orders add column if not exists status_pesanan text;
 alter table public.orders add column if not exists payment_proof_url text;
 alter table public.orders add column if not exists bukti_pembayaran text;
+alter table public.orders add column if not exists bukti_transfer text;
+alter table public.orders add column if not exists proof_url text;
+alter table public.orders add column if not exists payment_receipt_url text;
+alter table public.orders add column if not exists receipt_url text;
 alter table public.orders add column if not exists payment_rejected_reason text;
 alter table public.orders add column if not exists tracking_number text;
 alter table public.orders add column if not exists courier_name text;
@@ -160,10 +164,15 @@ set search_path = public
 as $$
 declare
   affected_count int;
+  proof_value text := proof_url;
 begin
   update public.orders
-  set payment_proof_url = proof_url,
-      bukti_pembayaran = proof_url,
+  set payment_proof_url = proof_value,
+      bukti_pembayaran = proof_value,
+      bukti_transfer = proof_value,
+      proof_url = proof_value,
+      payment_receipt_url = proof_value,
+      receipt_url = proof_value,
       updated_at = now()
   where id = order_id_to_update
     and coalesce(customer_id, user_id) = auth.uid()
@@ -175,7 +184,7 @@ begin
     raise exception 'Pesanan tidak ditemukan, bukan milik user ini, atau ongkir belum ditentukan.';
   end if;
 
-  return proof_url;
+  return proof_value;
 end;
 $$;
 

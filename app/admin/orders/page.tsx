@@ -175,7 +175,7 @@ function orderMaps(order: Order) {
 }
 
 function orderProof(order: Order) {
-  return firstText(
+  const explicitProof = firstText(
     order.payment_proof_url,
     order.bukti_pembayaran,
     order["bukti_transfer"],
@@ -183,6 +183,16 @@ function orderProof(order: Order) {
     order["payment_receipt_url"],
     order["receipt_url"],
   );
+
+  if (explicitProof) return explicitProof;
+
+  const storageProof = Object.values(order).find(
+    (value) =>
+      typeof value === "string" &&
+      (value.includes("/payment-proofs/") || value.includes("payment-proofs")),
+  );
+
+  return typeof storageProof === "string" ? storageProof : "";
 }
 
 function trackingNumber(order: Order) {

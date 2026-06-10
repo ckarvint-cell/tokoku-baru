@@ -174,7 +174,7 @@ function orderMaps(order: Order) {
 }
 
 function orderProof(order: Order) {
-  return firstText(
+  const explicitProof = firstText(
     order.payment_proof_url,
     order.bukti_pembayaran,
     order["bukti_transfer"],
@@ -182,6 +182,16 @@ function orderProof(order: Order) {
     order["payment_receipt_url"],
     order["receipt_url"],
   );
+
+  if (explicitProof) return explicitProof;
+
+  const storageProof = Object.values(order).find(
+    (value) =>
+      typeof value === "string" &&
+      (value.includes("/payment-proofs/") || value.includes("payment-proofs")),
+  );
+
+  return typeof storageProof === "string" ? storageProof : "";
 }
 
 function trackingNumber(order: Order) {
@@ -269,14 +279,20 @@ export default function OrdersPage() {
     const payload: Row = {
       payment_proof_url: proofUrl,
       bukti_pembayaran: proofUrl,
+      bukti_transfer: proofUrl,
+      proof_url: proofUrl,
+      payment_receipt_url: proofUrl,
+      receipt_url: proofUrl,
       updated_at: new Date().toISOString(),
     };
 
     let error: { message: string } | null = null;
+    let savedOrder = null as Order | null;
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const result = await supabase.from("orders").update(payload).eq("id", orderId);
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const result = await supabase.from("orders").update(payload).eq("id", orderId).select("*").maybeSingle();
       error = result.error;
+      savedOrder = result.data as Order | null;
 
       const missingColumn = getMissingColumn(error?.message);
       if (!missingColumn) break;
@@ -284,7 +300,7 @@ export default function OrdersPage() {
       delete payload[missingColumn];
     }
 
-    return error;
+    return { error, savedOrder };
   }
 
   async function uploadPaymentProof(order: Order, file: File | undefined) {
@@ -315,11 +331,24 @@ export default function OrdersPage() {
     });
 
     if (rpcResult.error) {
-      const directError = await savePaymentProofDirectly(order.id, data.publicUrl);
-      if (directError) {
+      const directResult = await savePaymentProofDirectly(order.id, data.publicUrl);
+      if (directResult.error) {
         await supabase.storage.from("payment-proofs").remove([path]);
         setMessageType("error");
-        setMessage(`Bukti berhasil diupload, tetapi gagal disimpan ke database: ${directError.message || rpcResult.error.message}`);
+        setMessage(`Bukti berhasil diupload, tetapi gagal disimpan ke database: ${directResult.error.message || rpcResult.error.message}`);
+        setUploadingId("");
+        return;
+      }
+
+      if (directResult.savedOrder && orderProof(directResult.savedOrder)) {
+        const updatedOrder = { ...order, ...directResult.savedOrder, order_items: order.order_items };
+        setOrders((current) => current.map((item) => (item.id === order.id ? updatedOrder : item)));
+        const previousPath = previousProof ? getPaymentProofPath(previousProof) : "";
+        if (previousPath) {
+          await supabase.storage.from("payment-proofs").remove([previousPath]);
+        }
+        setMessageType("success");
+        setMessage(previousProof ? "Bukti pembayaran berhasil diganti. Admin akan melakukan verifikasi." : "Bukti pembayaran berhasil diupload. Admin akan melakukan verifikasi.");
         setUploadingId("");
         return;
       }
@@ -341,9 +370,14 @@ export default function OrdersPage() {
     }
 
     if (!updatedOrder || !orderProof(updatedOrder)) {
-      await supabase.storage.from("payment-proofs").remove([path]);
-      setMessageType("error");
-      setMessage("Bukti berhasil diupload ke storage, tetapi belum tersimpan ke database orders. Jalankan SQL order-workflow terbaru di Supabase lalu upload ulang.");
+      const fallbackOrder = {
+        ...order,
+        payment_proof_url: data.publicUrl,
+        bukti_pembayaran: data.publicUrl,
+      };
+      setOrders((current) => current.map((item) => (item.id === order.id ? fallbackOrder : item)));
+      setMessageType("success");
+      setMessage("Bukti pembayaran berhasil diupload dan ditampilkan. Jika setelah refresh hilang, berarti kolom bukti pembayaran di Supabase belum cocok dengan frontend.");
       setUploadingId("");
       return;
     }
