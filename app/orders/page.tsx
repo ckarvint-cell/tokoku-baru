@@ -524,7 +524,7 @@ export default function OrdersPage() {
                   </span>
                 </div>
 
-                <div className="grid gap-3 p-4 lg:grid-cols-[1.35fr_0.9fr_0.8fr]">
+                <div className="grid gap-3 p-4 lg:grid-cols-3">
                   <div className="rounded-lg border border-slate-200 p-3">
                     <h3 className="text-sm font-bold">Detail Produk</h3>
                     <div className="mt-2 grid gap-1.5">
@@ -540,6 +540,27 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <h3 className="text-sm font-bold">Pembayaran</h3>
+                    <div className="mt-2 grid gap-1.5 text-sm">
+                      <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
+                      <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
+                      <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold">
+                        <span>Total Pembayaran</span><strong>{formatCurrency(grandTotal)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-bold text-emerald-950">Bukti Pembayaran</h3>
+                      {proof && <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>}
+                    </div>
+                    <p className="mt-2 text-sm text-emerald-800">
+                      {proof ? "Bukti sudah diterima." : status === "menunggu_pembayaran" ? "Silakan upload bukti transfer." : "Belum bisa upload bukti."}
+                    </p>
+                  </div>
+
                   <div className="rounded-lg border border-slate-200 p-3 text-sm leading-5 text-slate-600">
                     <h3 className="mb-1 font-bold text-slate-950">Penerima</h3>
                     <p className="truncate">Nama: {orderName(order) || "-"}</p>
@@ -552,38 +573,15 @@ export default function OrdersPage() {
                     )}
                   </div>
 
-                  <div className="grid content-start gap-3">
-                    <div className="rounded-lg border border-slate-200 p-3">
-                      <h3 className="text-sm font-bold">Pembayaran</h3>
-                      <div className="mt-2 grid gap-1.5 text-sm">
-                        <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
-                        <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
-                        <div className="flex justify-between border-t border-slate-200 pt-1.5">
-                          <span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    {proof && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-bold text-emerald-950">Bukti Pembayaran</h3>
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>
-                        </div>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-2 block w-24 overflow-hidden rounded-md border border-emerald-100 bg-white">
-                          <img src={proof} alt="Bukti pembayaran" className="h-24 w-full object-contain" />
-                        </a>
-                      </div>
-                    )}
-
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
                     {status === "menunggu_ongkir" && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-800">
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-800">
                         Admin sedang menentukan ongkir. Upload bukti pembayaran akan aktif setelah ongkir disimpan.
                       </div>
                     )}
 
-                    {status === "menunggu_pembayaran" && (
-                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    {(status === "menunggu_pembayaran" || proof) && (
+                      <>
                         <div className="flex items-start gap-3">
                           {paymentSettings.payment_logo_url && (
                             <img src={paymentSettings.payment_logo_url} alt={paymentSettings.bank_name} className="h-10 w-14 rounded-md bg-white object-contain p-2" />
@@ -594,21 +592,36 @@ export default function OrdersPage() {
                             <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
                           </div>
                         </div>
-                        <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
-                          {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={uploadingId === order.id}
-                            onChange={async (event) => {
-                              await uploadPaymentProof(order, event.target.files?.[0]);
-                              event.currentTarget.value = "";
-                            }}
-                            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                          />
-                        </label>
+                        {status === "menunggu_pembayaran" && (
+                          <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
+                            {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={uploadingId === order.id}
+                              onChange={async (event) => {
+                                await uploadPaymentProof(order, event.target.files?.[0]);
+                                event.currentTarget.value = "";
+                              }}
+                              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                            />
+                          </label>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    {proof ? (
+                      <a href={proof} target="_blank" rel="noreferrer" className="block w-24 overflow-hidden rounded-md border border-slate-200 bg-white">
+                        <img src={proof} alt="Bukti pembayaran" className="h-24 w-full object-contain" />
+                      </a>
+                    ) : (
+                      <div className="flex h-24 w-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-2 text-center text-xs font-medium text-slate-500">
+                        Belum ada bukti
                       </div>
                     )}
+                  </div>
 
                     {status === "ditolak" && (
                       <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
@@ -648,7 +661,6 @@ export default function OrdersPage() {
                       </div>
                     )}
                   </div>
-                </div>
               </article>
             );
           })}
