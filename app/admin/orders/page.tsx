@@ -108,11 +108,12 @@ function normalizeStatus(order: Order): Status {
   return "menunggu_pembayaran";
 }
 
-function statusLabel(status: Status) {
-  if (status === "menunggu_ongkir") return "menunggu ongkir";
-  if (status === "menunggu_pembayaran") return "menunggu pembayaran";
-  if (status === "pesanan_dikirim") return "sedang dikirim";
-  return "ditolak";
+function statusLabel(status: FilterStatus) {
+  if (status === "semua") return "Semua";
+  if (status === "menunggu_ongkir") return "Menunggu Ongkir";
+  if (status === "menunggu_pembayaran") return "Menunggu Pembayaran";
+  if (status === "pesanan_dikirim") return "Sedang Dikirim";
+  return "Ditolak";
 }
 
 function statusClass(status: Status) {
@@ -464,9 +465,11 @@ export default function AdminOrdersPage() {
 
   const counts = useMemo(
     () => ({
-      newOrders: orders.filter((order) => normalizeStatus(order) === "menunggu_ongkir").length,
-      uploadedProofs: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran" && orderProof(order)).length,
-      needVerify: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran" && orderProof(order)).length,
+      total: orders.length,
+      menungguOngkir: orders.filter((order) => normalizeStatus(order) === "menunggu_ongkir").length,
+      menungguPembayaran: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran").length,
+      sedangDikirim: orders.filter((order) => normalizeStatus(order) === "pesanan_dikirim").length,
+      ditolak: orders.filter((order) => normalizeStatus(order) === "ditolak").length,
     }),
     [orders],
   );
@@ -505,18 +508,26 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Pesanan Baru</p>
-            <p className="mt-2 text-3xl font-bold">{counts.newOrders}</p>
+            <p className="mt-2 text-3xl font-bold">{counts.total}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Bukti Terupload</p>
-            <p className="mt-2 text-3xl font-bold">{counts.uploadedProofs}</p>
+            <p className="text-sm font-medium text-slate-500">Menunggu Ongkir</p>
+            <p className="mt-2 text-3xl font-bold">{counts.menungguOngkir}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Perlu Verifikasi</p>
-            <p className="mt-2 text-3xl font-bold">{counts.needVerify}</p>
+            <p className="text-sm font-medium text-slate-500">Menunggu Pembayaran</p>
+            <p className="mt-2 text-3xl font-bold">{counts.menungguPembayaran}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Sedang Dikirim</p>
+            <p className="mt-2 text-3xl font-bold">{counts.sedangDikirim}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Ditolak</p>
+            <p className="mt-2 text-3xl font-bold">{counts.ditolak}</p>
           </div>
         </div>
 
@@ -529,7 +540,7 @@ export default function AdminOrdersPage() {
               className="rounded-md border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-400"
             >
               {statuses.map((status) => (
-                <option key={status} value={status}>{statusLabel(status as Status)}</option>
+                <option key={status} value={status}>{statusLabel(status)}</option>
               ))}
             </select>
           </label>
