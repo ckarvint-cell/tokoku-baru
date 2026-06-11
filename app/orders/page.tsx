@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "pesanan_dikirim" | "ditolak";
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "pesanan_dikirim" | "ditolak";
 type Row = Record<string, unknown>;
 
 type OrderItem = Row & {
@@ -107,12 +107,14 @@ function normalizeStatus(order: Order): Status {
   if (raw.includes("tolak")) return "ditolak";
   if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
   if (orderOngkir(order) <= 0) return "menunggu_ongkir";
+  if (raw.includes("konfirmasi") || orderProof(order)) return "menunggu_konfirmasi";
   return "menunggu_pembayaran";
 }
 
 function statusLabel(status: Status) {
   if (status === "menunggu_ongkir") return "menunggu ongkir";
   if (status === "menunggu_pembayaran") return "menunggu pembayaran";
+  if (status === "menunggu_konfirmasi") return "menunggu konfirmasi";
   if (status === "pesanan_dikirim") return "sedang dikirim";
   return "ditolak";
 }
@@ -120,6 +122,7 @@ function statusLabel(status: Status) {
 function statusClass(status: Status) {
   if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
+  if (status === "menunggu_konfirmasi") return "bg-violet-50 text-violet-700 border-violet-200";
   if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
@@ -355,6 +358,8 @@ export default function OrdersPage() {
       proof_url: proofUrl,
       payment_receipt_url: proofUrl,
       receipt_url: proofUrl,
+      status: "menunggu_konfirmasi",
+      status_pesanan: "menunggu_konfirmasi",
       updated_at: new Date().toISOString(),
     };
 
@@ -443,6 +448,8 @@ export default function OrdersPage() {
         ...order,
         payment_proof_url: data.publicUrl,
         bukti_pembayaran: data.publicUrl,
+        status: "menunggu_konfirmasi",
+        status_pesanan: "menunggu_konfirmasi",
       };
       setOrders((current) => current.map((item) => (item.id === order.id ? fallbackOrder : item)));
       await removeOldPaymentProofs(order.id, path, previousProof);
@@ -556,9 +563,15 @@ export default function OrdersPage() {
                       <h3 className="text-sm font-bold text-emerald-950">Bukti Pembayaran</h3>
                       {proof && <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>}
                     </div>
-                    <p className="mt-2 text-sm text-emerald-800">
-                      {proof ? "Bukti sudah diterima." : status === "menunggu_pembayaran" ? "Silakan upload bukti transfer." : "Belum bisa upload bukti."}
-                    </p>
+                    {proof ? (
+                      <a href={proof} target="_blank" rel="noreferrer" className="mt-2 block w-24 overflow-hidden rounded-md border border-emerald-100 bg-white">
+                        <img src={proof} alt="Bukti pembayaran" className="h-24 w-full object-contain" />
+                      </a>
+                    ) : (
+                      <div className="mt-2 flex h-24 w-24 items-center justify-center rounded-md border border-dashed border-emerald-200 bg-white px-2 text-center text-xs font-medium text-emerald-700">
+                        Belum ada bukti
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-lg border border-slate-200 p-3 text-sm leading-5 text-slate-600">
@@ -611,15 +624,17 @@ export default function OrdersPage() {
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    {proof ? (
-                      <a href={proof} target="_blank" rel="noreferrer" className="block w-24 overflow-hidden rounded-md border border-slate-200 bg-white">
-                        <img src={proof} alt="Bukti pembayaran" className="h-24 w-full object-contain" />
-                      </a>
-                    ) : (
-                      <div className="flex h-24 w-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-2 text-center text-xs font-medium text-slate-500">
-                        Belum ada bukti
+                  <div className="rounded-lg border border-slate-200 p-3 text-sm leading-5 text-slate-600">
+                    <h3 className="mb-1 font-bold text-slate-950">Nomor Resi</h3>
+                    {resi ? (
+                      <div className="grid gap-2">
+                        <p className="font-bold text-slate-950">{resi}</p>
+                        <button onClick={() => copyTrackingNumber(resi)} className="w-fit rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700">
+                          Copy Resi
+                        </button>
                       </div>
+                    ) : (
+                      <p>Nomor resi belum ada</p>
                     )}
                   </div>
 

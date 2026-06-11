@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "pesanan_dikirim" | "ditolak";
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "pesanan_dikirim" | "ditolak";
 type FilterStatus = Status | "semua";
 
 type Profile = {
@@ -84,7 +84,7 @@ type Draft = {
   trackingUrl: string;
 };
 
-const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "pesanan_dikirim", "ditolak"];
+const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "menunggu_konfirmasi", "pesanan_dikirim", "ditolak"];
 
 function asNumber(value: unknown) {
   const number = Number(value || 0);
@@ -105,6 +105,7 @@ function normalizeStatus(order: Order): Status {
   if (raw.includes("tolak")) return "ditolak";
   if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
   if (orderOngkir(order) <= 0) return "menunggu_ongkir";
+  if (raw.includes("konfirmasi") || orderProof(order)) return "menunggu_konfirmasi";
   return "menunggu_pembayaran";
 }
 
@@ -112,6 +113,7 @@ function statusLabel(status: FilterStatus) {
   if (status === "semua") return "Semua";
   if (status === "menunggu_ongkir") return "Menunggu Ongkir";
   if (status === "menunggu_pembayaran") return "Menunggu Pembayaran";
+  if (status === "menunggu_konfirmasi") return "Menunggu Konfirmasi";
   if (status === "pesanan_dikirim") return "Sedang Dikirim";
   return "Ditolak";
 }
@@ -119,6 +121,7 @@ function statusLabel(status: FilterStatus) {
 function statusClass(status: Status) {
   if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
+  if (status === "menunggu_konfirmasi") return "bg-violet-50 text-violet-700 border-violet-200";
   if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
@@ -468,6 +471,7 @@ export default function AdminOrdersPage() {
       total: orders.length,
       menungguOngkir: orders.filter((order) => normalizeStatus(order) === "menunggu_ongkir").length,
       menungguPembayaran: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran").length,
+      menungguKonfirmasi: orders.filter((order) => normalizeStatus(order) === "menunggu_konfirmasi").length,
       sedangDikirim: orders.filter((order) => normalizeStatus(order) === "pesanan_dikirim").length,
       ditolak: orders.filter((order) => normalizeStatus(order) === "ditolak").length,
     }),
@@ -508,7 +512,7 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Pesanan Baru</p>
             <p className="mt-2 text-3xl font-bold">{counts.total}</p>
@@ -520,6 +524,10 @@ export default function AdminOrdersPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Menunggu Pembayaran</p>
             <p className="mt-2 text-3xl font-bold">{counts.menungguPembayaran}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Menunggu Konfirmasi</p>
+            <p className="mt-2 text-3xl font-bold">{counts.menungguKonfirmasi}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Sedang Dikirim</p>

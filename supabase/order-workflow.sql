@@ -57,7 +57,7 @@ where customer_id is null
 alter table public.orders drop constraint if exists orders_status_check;
 alter table public.orders
   add constraint orders_status_check
-  check (status in ('Menunggu Ongkir', 'Menunggu Pembayaran', 'Pesanan Dikirim', 'Ditolak'));
+  check (status in ('Menunggu Ongkir', 'Menunggu Pembayaran', 'Menunggu Konfirmasi', 'Pesanan Dikirim', 'Ditolak', 'menunggu_ongkir', 'menunggu_pembayaran', 'menunggu_konfirmasi', 'pesanan_dikirim', 'ditolak'));
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
@@ -177,6 +177,8 @@ begin
       proof_url = proof_value,
       payment_receipt_url = proof_value,
       receipt_url = proof_value,
+      status = 'menunggu_konfirmasi',
+      status_pesanan = 'menunggu_konfirmasi',
       updated_at = now()
   where id = order_id_to_update
     and coalesce(customer_id, user_id) = auth.uid()
