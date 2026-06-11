@@ -524,7 +524,7 @@ export default function OrdersPage() {
                   </span>
                 </div>
 
-                <div className="grid gap-3 p-4 lg:grid-cols-3">
+                <div className="grid gap-3 p-4 lg:grid-cols-[3fr_2fr_1fr]">
                   <div className="rounded-lg border border-slate-200 p-3">
                     <h3 className="text-sm font-bold">Detail Produk</h3>
                     <div className="mt-2 grid gap-1.5">
@@ -624,14 +624,14 @@ export default function OrdersPage() {
                   </div>
 
                     {status === "ditolak" && (
-                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm leading-5 text-rose-800 lg:col-span-3">
                         <strong>Pembayaran ditolak.</strong>
                         <p>{firstText(order.payment_rejected_reason, order.alasan_penolakan) || "Admin belum memberi alasan."}</p>
                       </div>
                     )}
 
                     {status === "pesanan_dikirim" && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 lg:col-span-3">
                         <div className="flex items-start gap-3">
                           {logo && <img src={logo} alt={courierName(order) || "Logo kurir"} className="h-12 w-16 rounded-md bg-white object-contain p-2" />}
                           <div>
