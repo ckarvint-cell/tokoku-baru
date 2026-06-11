@@ -74,6 +74,15 @@ type PaymentSettings = {
   payment_note: string;
 };
 
+type FooterSettings = {
+  store_name: string;
+  address: string;
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  copyright_text: string;
+};
+
 type StoredPaymentProof = {
   name: string;
   created_at?: string | null;
@@ -88,6 +97,15 @@ const defaultPaymentSettings: PaymentSettings = {
   payment_note: "",
 };
 
+const defaultFooterSettings: FooterSettings = {
+  store_name: "Tokoku",
+  address: "",
+  whatsapp: "",
+  email: "",
+  instagram: "",
+  copyright_text: "",
+};
+
 function asNumber(value: unknown) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
@@ -100,6 +118,15 @@ function firstText(...values: unknown[]) {
 
 function formatCurrency(value: number | null | undefined) {
   return `Rp ${asNumber(value).toLocaleString("id-ID")}`;
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function normalizeStatus(order: Order): Status {
@@ -289,6 +316,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
+  const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -318,13 +346,14 @@ export default function OrdersPage() {
 
       setUserId(user.id);
 
-      const [ordersResult, paymentResult] = await Promise.all([
+      const [ordersResult, paymentResult, footerResult] = await Promise.all([
         supabase
           .from("orders")
           .select("*, order_items(*)")
           .or(`customer_id.eq.${user.id},user_id.eq.${user.id}`)
           .order("created_at", { ascending: false }),
         supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
+        supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
       ]);
 
       if (ordersResult.error?.message.includes("customer_id")) {
@@ -338,6 +367,7 @@ export default function OrdersPage() {
       }
 
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
+      if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
       const checkoutSuccess = window.sessionStorage.getItem("checkout_success");
       if (checkoutSuccess) {
         setMessageType("success");
@@ -472,6 +502,156 @@ export default function OrdersPage() {
     setMessage("Nomor resi berhasil dicopy.");
   }
 
+  function printInvoice(order: Order) {
+    const status = normalizeStatus(order);
+    const isPaid = status === "pesanan_dikirim";
+    const proof = orderProof(order);
+    const totalProduk = orderTotalProduk(order);
+    const ongkir = orderOngkir(order);
+    const grandTotal = orderGrandTotal(order);
+    const resi = trackingNumber(order);
+    const storeName = footerSettings.store_name || defaultFooterSettings.store_name;
+    const invoiceNumber = `INV-${order.id.slice(0, 8).toUpperCase()}`;
+    const productRows = (order.order_items || [])
+      .map((item) => {
+        const note = itemNote(item);
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(itemName(item))}</strong>
+              ${note ? `<div class="muted">Catatan: ${escapeHtml(note)}</div>` : ""}
+            </td>
+            <td class="center">${itemQty(item)}</td>
+            <td class="right">${formatCurrency(itemPrice(item))}</td>
+            <td class="right">${formatCurrency(itemSubtotal(item))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(invoiceNumber)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, sans-serif; }
+            .invoice { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 24mm 18mm; overflow: hidden; }
+            .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0; }
+            .watermark span { transform: rotate(-18deg); font-size: 84px; font-weight: 900; letter-spacing: 8px; opacity: .3; color: ${isPaid ? "#16a34a" : "#dc2626"}; }
+            .content { position: relative; z-index: 1; }
+            .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f172a; padding-bottom: 18px; }
+            .brand { font-size: 28px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+            .meta { text-align: right; line-height: 1.6; }
+            .small { font-size: 12px; color: #475569; line-height: 1.6; }
+            .muted { margin-top: 4px; font-size: 12px; color: #64748b; }
+            h2 { margin: 24px 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: 2px; color: #f43f5e; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th { background: #fff1f2; color: #0f172a; text-align: left; font-size: 12px; padding: 10px; border: 1px solid #fecdd3; }
+            td { padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; font-size: 13px; }
+            .right { text-align: right; }
+            .center { text-align: center; }
+            .summary { margin-left: auto; width: 45%; margin-top: 12px; }
+            .summary td { border-color: #fecdd3; }
+            .summary .grand td { font-size: 16px; font-weight: 900; background: #fff1f2; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+            .box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; min-height: 110px; }
+            .proof { max-width: 220px; max-height: 160px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; }
+            .bank { display: flex; gap: 12px; align-items: flex-start; }
+            .bank img { width: 64px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; }
+            @media print {
+              body { background: white; }
+              .invoice { margin: 0; width: auto; min-height: auto; box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="invoice">
+            <div class="watermark"><span>${isPaid ? "LUNAS" : "BELUM LUNAS"}</span></div>
+            <div class="content">
+              <section class="header">
+                <div>
+                  <div class="brand">${escapeHtml(storeName)}</div>
+                  ${footerSettings.address ? `<div class="small">${escapeHtml(footerSettings.address)}</div>` : ""}
+                  ${footerSettings.whatsapp ? `<div class="small">WhatsApp: ${escapeHtml(footerSettings.whatsapp)}</div>` : ""}
+                  ${footerSettings.email ? `<div class="small">Email: ${escapeHtml(footerSettings.email)}</div>` : ""}
+                </div>
+                <div class="meta">
+                  <strong>${escapeHtml(invoiceNumber)}</strong><br />
+                  <span class="small">${new Date(order.created_at).toLocaleString("id-ID")}</span><br />
+                  <span class="small">Status: ${escapeHtml(statusLabel(status))}</span>
+                </div>
+              </section>
+
+              <h2>Detail Produk</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Produk</th>
+                    <th class="center">Qty</th>
+                    <th class="right">Harga</th>
+                    <th class="right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>${productRows}</tbody>
+              </table>
+              <table class="summary">
+                <tbody>
+                  <tr><td>Total Produk</td><td class="right">${formatCurrency(totalProduk)}</td></tr>
+                  <tr><td>Ongkir</td><td class="right">${formatCurrency(ongkir)}</td></tr>
+                  <tr class="grand"><td>Total Harga</td><td class="right">${formatCurrency(grandTotal)}</td></tr>
+                </tbody>
+              </table>
+
+              <div class="grid">
+                <section class="box">
+                  <h2>Bukti Pembayaran</h2>
+                  ${proof ? `<img class="proof" src="${escapeHtml(proof)}" alt="Bukti pembayaran" />` : `<p class="small">Belum ada bukti pembayaran.</p>`}
+                </section>
+                <section class="box">
+                  <h2>Penerima & Resi</h2>
+                  <div class="small">Nama: ${escapeHtml(orderName(order) || "-")}</div>
+                  <div class="small">WhatsApp: ${escapeHtml(orderPhone(order) || "-")}</div>
+                  <div class="small">Alamat: ${escapeHtml(orderAddress(order) || "-")}</div>
+                  ${orderMaps(order) ? `<div class="small">Maps: ${escapeHtml(orderMaps(order))}</div>` : ""}
+                  <div class="small">Nomor Resi: ${escapeHtml(resi || "Nomor resi belum ada")}</div>
+                  ${courierName(order) ? `<div class="small">Kurir: ${escapeHtml(courierName(order))}</div>` : ""}
+                  ${trackingUrl(order) ? `<div class="small">Tracking: ${escapeHtml(trackingUrl(order))}</div>` : ""}
+                </section>
+              </div>
+
+              <section class="box" style="margin-top: 14px;">
+                <h2>Rekening Resmi</h2>
+                <div class="bank">
+                  ${paymentSettings.payment_logo_url ? `<img src="${escapeHtml(paymentSettings.payment_logo_url)}" alt="${escapeHtml(paymentSettings.bank_name)}" />` : ""}
+                  <div class="small">
+                    <strong>${escapeHtml(paymentSettings.bank_name || "Rekening belum diatur")}</strong><br />
+                    Nomor rekening: ${escapeHtml(paymentSettings.account_number || "-")}<br />
+                    Atas nama: ${escapeHtml(paymentSettings.account_holder || "-")}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </main>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      setMessageType("error");
+      setMessage("Popup print diblokir browser. Izinkan popup untuk mencetak invoice.");
+      return;
+    }
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#fbf7f4] text-slate-950">
@@ -526,9 +706,18 @@ export default function OrdersPage() {
                     </p>
                     <h2 className="mt-0.5 text-lg font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
                   </div>
-                  <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
-                    {statusLabel(status)}
-                  </span>
+                  <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
+                      {statusLabel(status)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => printInvoice(order)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-rose-300 hover:text-rose-600"
+                    >
+                      Print Invoice
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid gap-3 p-4 lg:grid-cols-[3fr_2fr_1fr]">
