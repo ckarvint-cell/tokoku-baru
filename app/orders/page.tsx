@@ -88,9 +88,6 @@ const defaultPaymentSettings: PaymentSettings = {
   payment_note: "",
 };
 
-const officialPaymentWarning =
-  "Transfer sesuai Grand Total hanya ke rekening resmi di bawah ini. Pembayaran di luar rekening resmi toko tidak menjadi tanggung jawab kami. Setelah transfer berhasil, upload bukti pembayaran pada pesanan ini.";
-
 function asNumber(value: unknown) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
@@ -492,7 +489,7 @@ export default function OrdersPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-5 py-8">
+      <section className="mx-auto max-w-6xl px-5 py-5">
         {message && (
           <div className={`mb-5 rounded-lg border px-4 py-3 text-sm font-medium ${
             messageType === "error"
@@ -503,7 +500,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        <div className="grid gap-5">
+        <div className="grid gap-3">
           {orders.map((order) => {
             const status = normalizeStatus(order);
             const proof = orderProof(order);
@@ -515,23 +512,22 @@ export default function OrdersPage() {
 
             return (
               <article key={order.id} className="rounded-lg border border-rose-100 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-rose-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-2 border-b border-rose-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-500">
                       {new Date(order.created_at).toLocaleString("id-ID")}
                     </p>
-                    <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                    <h2 className="mt-0.5 text-lg font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
                   </div>
                   <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
                     {statusLabel(status)}
                   </span>
                 </div>
 
-                <div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
-                  <div className="grid gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Detail Produk</h3>
-                      <div className="mt-3 grid gap-2">
+                <div className="grid gap-3 p-4 lg:grid-cols-[1.35fr_0.9fr_0.8fr]">
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <h3 className="text-sm font-bold">Detail Produk</h3>
+                    <div className="mt-2 grid gap-1.5">
                         {order.order_items.map((item) => (
                           <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
                             <div className="flex justify-between gap-3">
@@ -541,72 +537,63 @@ export default function OrdersPage() {
                             {itemNote(item) && <p className="mt-1 text-xs text-slate-500">Catatan: {itemNote(item)}</p>}
                           </div>
                         ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
-                      <h3 className="mb-2 font-bold text-slate-950">Penerima</h3>
-                      <p>Nama: {orderName(order) || "-"}</p>
-                      <p>WhatsApp: {orderPhone(order) || "-"}</p>
-                      <p>Alamat: {orderAddress(order) || "-"}</p>
-                      {orderMaps(order) && (
-                        <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
-                          Buka titik Google Maps
-                        </a>
-                      )}
                     </div>
                   </div>
 
-                  <div className="grid content-start gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Ringkasan Pembayaran</h3>
-                      <div className="mt-3 grid gap-2 text-sm">
+                  <div className="rounded-lg border border-slate-200 p-3 text-sm leading-5 text-slate-600">
+                    <h3 className="mb-1 font-bold text-slate-950">Penerima</h3>
+                    <p className="truncate">Nama: {orderName(order) || "-"}</p>
+                    <p className="truncate">WhatsApp: {orderPhone(order) || "-"}</p>
+                    <p className="line-clamp-2">Alamat: {orderAddress(order) || "-"}</p>
+                    {orderMaps(order) && (
+                      <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex font-bold text-rose-600">
+                        Buka Google Maps
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="grid content-start gap-3">
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <h3 className="text-sm font-bold">Pembayaran</h3>
+                      <div className="mt-2 grid gap-1.5 text-sm">
                         <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
                         <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
-                        <div className="flex justify-between border-t border-slate-200 pt-2 text-base">
+                        <div className="flex justify-between border-t border-slate-200 pt-1.5">
                           <span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong>
                         </div>
                       </div>
                     </div>
 
                     {proof && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-bold text-emerald-950">Bukti Pembayaran</h3>
-                            <p className="mt-1 text-sm leading-6 text-emerald-800">
-                              Bukti pembayaran sudah tersimpan. Klik gambar untuk melihat ukuran penuh.
-                            </p>
-                          </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-bold text-emerald-950">Bukti Pembayaran</h3>
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700">Tersimpan</span>
                         </div>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block w-32 overflow-hidden rounded-md border border-emerald-100 bg-white sm:w-40">
-                          <img src={proof} alt="Bukti pembayaran" className="h-32 w-full object-contain sm:h-40" />
+                        <a href={proof} target="_blank" rel="noreferrer" className="mt-2 block w-24 overflow-hidden rounded-md border border-emerald-100 bg-white">
+                          <img src={proof} alt="Bukti pembayaran" className="h-24 w-full object-contain" />
                         </a>
                       </div>
                     )}
 
                     {status === "menunggu_ongkir" && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-800">
                         Admin sedang menentukan ongkir. Upload bukti pembayaran akan aktif setelah ongkir disimpan.
                       </div>
                     )}
 
                     {status === "menunggu_pembayaran" && (
-                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
                         <div className="flex items-start gap-3">
                           {paymentSettings.payment_logo_url && (
-                            <img src={paymentSettings.payment_logo_url} alt={paymentSettings.bank_name} className="h-12 w-16 rounded-md bg-white object-contain p-2" />
+                            <img src={paymentSettings.payment_logo_url} alt={paymentSettings.bank_name} className="h-10 w-14 rounded-md bg-white object-contain p-2" />
                           )}
-                          <div className="text-sm leading-6">
+                          <div className="text-sm leading-5">
                             <h3 className="font-bold text-slate-950">{paymentSettings.bank_name || "Rekening belum diatur"}</h3>
                             <p>No. Rekening: <strong>{paymentSettings.account_number || "-"}</strong></p>
                             <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
                           </div>
                         </div>
-                        <p className="mt-3 rounded-md bg-white px-3 py-3 text-sm leading-6 text-slate-600">
-                          {paymentSettings.payment_note || officialPaymentWarning}
-                        </p>
                         <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
                           {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
                           <input
