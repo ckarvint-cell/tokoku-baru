@@ -1047,7 +1047,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setCartOpen(true)}
-                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white"
+                className="rounded-md bg-rose-600 px-2 py-1 text-[10px] font-bold leading-none text-white sm:px-3 sm:py-1.5 sm:text-xs"
               >
                 Keranjang ({cartQty})
               </button>
