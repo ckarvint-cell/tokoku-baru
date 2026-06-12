@@ -191,6 +191,15 @@ function orderItemsTotal(order: Order) {
   return (order.order_items || []).reduce((total, item) => total + itemSubtotal(item), 0);
 }
 
+function orderTotalQty(order: Order) {
+  return (order.order_items || []).reduce((total, item) => total + itemQty(item), 0);
+}
+
+function orderFirstProductName(order: Order) {
+  const firstItem = (order.order_items || [])[0];
+  return firstItem ? itemName(firstItem) : "Produk";
+}
+
 function orderTotalProduk(order: Order) {
   return asNumber(order.total_produk ?? order.total_harga ?? order.total) || orderItemsTotal(order);
 }
@@ -324,6 +333,7 @@ export default function OrdersPage() {
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [uploadingId, setUploadingId] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
   async function removeOldPaymentProofs(orderId: string, keepPath: string, previousProof: string) {
     const storedPaths = await listStoredPaymentProofs(userId, orderId);
@@ -511,6 +521,10 @@ export default function OrdersPage() {
 
   function copyTrackingNumber(resi: string, orderId: string) {
     copyText(resi, `resi-${orderId}`);
+  }
+
+  function toggleOrder(orderId: string) {
+    setExpandedOrders((current) => ({ ...current, [orderId]: !current[orderId] }));
   }
 
   function copyAccountNumber(orderId: string) {
@@ -711,19 +725,40 @@ export default function OrdersPage() {
             const grandTotal = orderGrandTotal(order);
             const resi = trackingNumber(order);
             const canUploadProof = status === "menunggu_pembayaran" || status === "menunggu_konfirmasi";
+            const isExpanded = expandedOrders[order.id] ?? false;
+            const totalQty = orderTotalQty(order);
+            const firstProductName = orderFirstProductName(order);
 
             return (
               <article key={order.id} className="rounded-lg border border-rose-100 bg-white shadow-sm">
-                <div className="flex flex-col gap-2 border-b border-rose-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleOrder(order.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleOrder(order.id);
+                    }
+                  }}
+                  className="flex cursor-pointer flex-col gap-2 border-b border-rose-100 px-4 py-3 transition hover:bg-rose-50/40 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-500">
                       {new Date(order.created_at).toLocaleString("id-ID")}
                     </p>
-                    <h2 className="mt-0.5 text-lg font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <h2 className="text-lg font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                      <span className="text-sm font-semibold text-slate-600">{firstProductName} - {totalQty} barang</span>
+                      <span className="text-sm font-bold text-slate-950">{formatCurrency(totalProduk)}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-start gap-2 sm:items-end">
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end" onClick={(event) => event.stopPropagation()}>
                     <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
                       {statusLabel(status)}
+                    </span>
+                    <span className="rounded-md border border-rose-100 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+                      {isExpanded ? "Tutup Detail" : "Lihat Detail"}
                     </span>
                     <button
                       type="button"
@@ -735,6 +770,7 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
+                {isExpanded && (
                 <div className="grid gap-3 p-4 lg:grid-cols-[3fr_2fr_1fr]">
                   <div className="rounded-lg border border-slate-200 p-3">
                     <h3 className="text-sm font-bold">Detail Produk</h3>
@@ -869,6 +905,7 @@ export default function OrdersPage() {
                     )}
 
                   </div>
+                )}
               </article>
             );
           })}

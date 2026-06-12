@@ -209,6 +209,15 @@ function orderItemsTotal(order: Order) {
   return (order.order_items || []).reduce((total, item) => total + itemSubtotal(item), 0);
 }
 
+function orderTotalQty(order: Order) {
+  return (order.order_items || []).reduce((total, item) => total + itemQty(item), 0);
+}
+
+function orderFirstProductName(order: Order) {
+  const firstItem = (order.order_items || [])[0];
+  return firstItem ? itemName(firstItem) : "Produk";
+}
+
 function orderTotalProduk(order: Order) {
   return asNumber(order.total_produk ?? order.total_harga ?? order.total) || orderItemsTotal(order);
 }
@@ -382,6 +391,7 @@ export default function AdminOrdersPage() {
   const [message, setMessage] = useState("");
   const [approvingOrder, setApprovingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function checkAccessAndLoad() {
@@ -431,6 +441,10 @@ export default function AdminOrdersPage() {
   async function loadPaymentSettings() {
     const { data } = await supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url").eq("id", true).maybeSingle();
     if (data) setPaymentSettings({ ...defaultPaymentSettings, ...data });
+  }
+
+  function toggleOrder(orderId: string) {
+    setExpandedOrders((current) => ({ ...current, [orderId]: !current[orderId] }));
   }
 
   function updateDraft(orderId: string, key: keyof Draft, value: string) {
@@ -1012,20 +1026,41 @@ export default function AdminOrdersPage() {
             const canSendTracking = !needsAcceptedFirst && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
             const canPrintLabel = Boolean(currentResi);
             const canVerifyOrder = status === "menunggu_konfirmasi";
+            const isExpanded = expandedOrders[order.id] ?? false;
+            const totalQty = orderTotalQty(order);
+            const firstProductName = orderFirstProductName(order);
 
             return (
               <article key={order.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleOrder(order.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleOrder(order.id);
+                    }
+                  }}
+                  className="flex cursor-pointer flex-col gap-3 border-b border-slate-200 px-5 py-4 transition hover:bg-slate-50 lg:flex-row lg:items-start lg:justify-between"
+                >
+                  <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">
                       {new Date(order.created_at).toLocaleString("id-ID")}
                     </p>
-                    <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <h2 className="text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
+                      <span className="text-sm font-semibold text-slate-600">{firstProductName} - {totalQty} barang</span>
+                      <span className="text-sm font-bold text-slate-950">{formatCurrency(totalProduk)}</span>
+                    </div>
                     <p className="mt-1 text-sm text-slate-500">{orderName(order) || "-"} - {orderPhone(order) || "-"}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                     <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
                       {statusLabel(status)}
+                    </span>
+                    <span className="rounded-md border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500">
+                      {isExpanded ? "Tutup Detail" : "Lihat Detail"}
                     </span>
                     <button
                       type="button"
@@ -1046,7 +1081,8 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 p-5 xl:grid-cols-3">
+                {isExpanded && (
+                <div className="grid gap-4 p-5 xl:grid-cols-[3fr_2fr_1fr]">
                   <div className="rounded-lg border border-slate-200 p-4">
                     <h3 className="font-bold">Detail Produk</h3>
                     <div className="mt-3 grid gap-2">
@@ -1188,6 +1224,7 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
                 </div>
+                )}
               </article>
             );
           })}
