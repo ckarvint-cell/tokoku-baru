@@ -316,6 +316,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
+  const [approvingOrder, setApprovingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
@@ -392,7 +393,7 @@ export default function AdminOrdersPage() {
     ) {
       setMessage("Status Proses belum diizinkan di database. Jalankan SQL order-workflow terbaru di Supabase terlebih dahulu.");
       setSavingId("");
-      return;
+      return false;
     }
 
     for (let attempt = 0; attempt < 5 && isStatusConstraintError(error?.message); attempt += 1) {
@@ -405,12 +406,13 @@ export default function AdminOrdersPage() {
     if (error) {
       setMessage(error.message);
       setSavingId("");
-      return;
+      return false;
     }
 
     await loadOrders();
     setMessage(successMessage);
     setSavingId("");
+    return true;
   }
 
   async function saveShipping(order: Order) {
@@ -462,10 +464,10 @@ export default function AdminOrdersPage() {
   async function approvePayment(order: Order) {
     if (!orderProof(order)) {
       setMessage("Customer harus upload bukti pembayaran sebelum pesanan bisa di-approve.");
-      return;
+      return false;
     }
 
-    await updateOrder(
+    return updateOrder(
       order.id,
       {
         status: "proses",
@@ -771,7 +773,7 @@ export default function AdminOrdersPage() {
                     <div className="mt-3 grid gap-3">
                       <button
                         disabled={savingId === order.id || !proof}
-                        onClick={() => approvePayment(order)}
+                        onClick={() => setApprovingOrder(order)}
                         className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                       >
                         Terima Pesanan
@@ -801,6 +803,44 @@ export default function AdminOrdersPage() {
         {filteredOrders.length === 0 && (
           <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">
             Belum ada pesanan untuk filter ini.
+          </div>
+        )}
+
+        {approvingOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
+            <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-xl font-black text-emerald-700">
+                OK
+              </div>
+              <p className="mt-4 text-xs font-bold uppercase tracking-[0.25em] text-emerald-600">Terima Pesanan</p>
+              <h2 className="mt-2 text-xl font-bold">Yakin menerima pesanan #{approvingOrder.id.slice(0, 8)}?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Pastikan bukti transfer customer sudah benar. Jika diterima, status pesanan berubah menjadi Proses dan kolom resi bisa digunakan.
+              </p>
+              <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                Total pembayaran: <strong>{formatCurrency(orderGrandTotal(approvingOrder))}</strong>
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setApprovingOrder(null)}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+                >
+                  Tidak
+                </button>
+                <button
+                  type="button"
+                  disabled={savingId === approvingOrder.id}
+                  onClick={async () => {
+                    const approved = await approvePayment(approvingOrder);
+                    if (approved) setApprovingOrder(null);
+                  }}
+                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {savingId === approvingOrder.id ? "Memproses..." : "Ya, Terima Pesanan"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
