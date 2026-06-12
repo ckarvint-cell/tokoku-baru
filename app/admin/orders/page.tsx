@@ -647,6 +647,7 @@ export default function AdminOrdersPage() {
               : couriers;
             const needsAcceptedFirst = status !== "diproses";
             const canSendTracking = status === "diproses" && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
+            const canVerifyOrder = status === "menunggu_konfirmasi";
 
             return (
               <article key={order.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -777,19 +778,24 @@ export default function AdminOrdersPage() {
                     <h3 className="font-bold">Verifikasi Pesanan</h3>
                     <div className="mt-3 grid gap-3">
                       <button
-                        disabled={savingId === order.id || !proof}
+                        disabled={savingId === order.id || !proof || !canVerifyOrder}
                         onClick={() => setApprovingOrder(order)}
+                        title={!canVerifyOrder ? "Pesanan ini sudah tidak berada di tahap verifikasi." : undefined}
                         className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                       >
                         Terima Pesanan
                       </button>
                       <button
-                        disabled={savingId === order.id}
+                        disabled={savingId === order.id || !canVerifyOrder}
                         onClick={() => setRejectingOrder(order)}
+                        title={!canVerifyOrder ? "Pesanan ini sudah tidak berada di tahap verifikasi." : undefined}
                         className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                       >
                         Tolak Pesanan
                       </button>
+                      {!canVerifyOrder && (
+                        <p className="text-xs font-semibold text-slate-500">Verifikasi sudah selesai untuk pesanan ini.</p>
+                      )}
                       <button
                         disabled={savingId === order.id}
                         onClick={() => deleteOrder(order)}
