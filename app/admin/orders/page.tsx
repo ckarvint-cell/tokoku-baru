@@ -297,6 +297,29 @@ function isStatusConstraintError(errorMessage: string | undefined) {
   return Boolean(errorMessage?.includes("orders_status_check"));
 }
 
+async function updateOrderWithRequiredCourier(orderId: string, payload: Row, courierColumn: string) {
+  const adaptivePayload = { ...payload };
+  let error: { message: string } | null = null;
+  let missingRequiredCourier = false;
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+    error = result.error;
+
+    const missingColumn = getMissingColumn(error?.message);
+    if (!missingColumn) break;
+
+    if (missingColumn === courierColumn) {
+      missingRequiredCourier = true;
+      break;
+    }
+
+    delete adaptivePayload[missingColumn];
+  }
+
+  return { error, missingRequiredCourier };
+}
+
 function makeDraft(order: Order): Draft {
   return {
     shippingCost: orderOngkir(order) ? formatNumberInput(String(orderOngkir(order))) : "",
@@ -502,22 +525,42 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    await updateOrder(
-      order.id,
-      {
+    setSavingId(order.id);
+    setMessage("");
+
+    const courierColumns = ["courier_name", "nama_kurir", "kurir", "shipping_courier"];
+    let lastError = null as { message: string } | null;
+
+    for (const courierColumn of courierColumns) {
+      const payload = {
         status: "pesanan_dikirim",
         status_pesanan: "pesanan_dikirim",
         tracking_number: tracking,
         nomor_resi: tracking,
-        courier_name: selectedCourier,
-        nama_kurir: selectedCourier,
-        kurir: selectedCourier,
-        shipping_courier: selectedCourier,
+        [courierColumn]: selectedCourier,
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
-      "Resi dan kurir berhasil ditulis/input. Status pesanan menjadi Sedang Dikirim.",
-    );
+      };
+
+      const { error, missingRequiredCourier } = await updateOrderWithRequiredCourier(order.id, payload, courierColumn);
+      lastError = error;
+
+      if (isStatusConstraintError(error?.message)) {
+        setMessage("Status Sedang Dikirim belum diizinkan di database. Jalankan SQL order-workflow terbaru di Supabase terlebih dahulu.");
+        setSavingId("");
+        return;
+      }
+
+      if (!error && !missingRequiredCourier) {
+        await loadOrders();
+        setMessage(`Resi dan nama kurir ${selectedCourier} berhasil disimpan. Status pesanan menjadi Sedang Dikirim.`);
+        setSavingId("");
+        return;
+      }
+    }
+
+    setMessage(lastError?.message || "Nama kurir belum bisa disimpan. Jalankan SQL order-workflow terbaru di Supabase agar kolom courier_name tersedia.");
+    setSavingId("");
   }
 
   async function deleteOrder(order: Order) {
