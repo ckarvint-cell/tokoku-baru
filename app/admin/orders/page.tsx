@@ -297,6 +297,15 @@ function isStatusConstraintError(errorMessage: string | undefined) {
   return Boolean(errorMessage?.includes("orders_status_check"));
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 async function updateOrderWithRequiredCourier(orderId: string, payload: Row, courierColumn: string) {
   const adaptivePayload = { ...payload };
   let error: { message: string } | null = null;
@@ -583,6 +592,75 @@ export default function AdminOrdersPage() {
     setSavingId("");
   }
 
+  function printShippingLabel(order: Order) {
+    const resi = trackingNumber(order);
+    const courier = courierName(order);
+
+    if (!resi) {
+      setMessage("Nomor resi belum ada, label belum bisa dicetak.");
+      return;
+    }
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Label ${escapeHtml(order.id.slice(0, 8))}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; }
+            .label { width: 100mm; min-height: 150mm; padding: 10mm; border: 1px solid #cbd5e1; }
+            .title { font-size: 18px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
+            .section { margin-top: 12px; }
+            .small { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+            .value { margin-top: 4px; font-size: 15px; font-weight: 800; line-height: 1.4; }
+            .address { font-size: 13px; font-weight: 600; line-height: 1.5; white-space: pre-wrap; }
+            .resi { margin-top: 8px; border: 2px solid #0f172a; padding: 10px; text-align: center; font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+            @media print {
+              body { margin: 0; }
+              .label { border: 0; width: auto; min-height: auto; }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="label">
+            <div class="title">Label Pengiriman</div>
+            <div class="section">
+              <div class="small">Kurir</div>
+              <div class="value">${escapeHtml(courier || "-")}</div>
+            </div>
+            <div class="section">
+              <div class="small">Nomor Resi</div>
+              <div class="resi">${escapeHtml(resi)}</div>
+            </div>
+            <div class="section">
+              <div class="small">Penerima</div>
+              <div class="value">${escapeHtml(orderName(order) || "-")}</div>
+              <div class="address">${escapeHtml(orderPhone(order) || "-")}</div>
+            </div>
+            <div class="section">
+              <div class="small">Alamat</div>
+              <div class="address">${escapeHtml(orderAddress(order) || "-")}</div>
+            </div>
+            ${orderMaps(order) ? `<div class="section"><div class="small">Google Maps</div><div class="address">${escapeHtml(orderMaps(order))}</div></div>` : ""}
+          </main>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=520,height=720");
+    if (!printWindow) {
+      setMessage("Popup print diblokir browser. Izinkan popup untuk mencetak label.");
+      return;
+    }
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 400);
+  }
+
   async function deleteOrder(order: Order) {
     if (!window.confirm("Yakin ingin menghapus pesanan ini?")) return;
 
@@ -709,11 +787,13 @@ export default function AdminOrdersPage() {
             const totalProduk = orderTotalProduk(order);
             const ongkir = orderOngkir(order);
             const grandTotal = orderGrandTotal(order);
+            const currentResi = trackingNumber(order);
             const courierOptions = draft.courierName && !couriers.some((courier) => courier.name === draft.courierName)
               ? [...couriers, { id: "current", name: draft.courierName }]
               : couriers;
             const needsAcceptedFirst = !["diproses", "pesanan_dikirim"].includes(status);
             const canSendTracking = !needsAcceptedFirst && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
+            const canPrintLabel = Boolean(currentResi);
             const canVerifyOrder = status === "menunggu_konfirmasi";
 
             return (
@@ -818,7 +898,7 @@ export default function AdminOrdersPage() {
                           </select>
                         </label>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
                         <button
                           disabled={savingId === order.id}
                           onClick={() => saveShipping(order)}
@@ -833,6 +913,15 @@ export default function AdminOrdersPage() {
                           className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
                           Kirim Resi
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canPrintLabel}
+                          onClick={() => printShippingLabel(order)}
+                          title={!canPrintLabel ? "Nomor resi belum ada." : undefined}
+                          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
+                        >
+                          Cetak Label
                         </button>
                       </div>
                       {needsAcceptedFirst && (

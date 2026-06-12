@@ -248,10 +248,6 @@ function courierName(order: Order) {
   return firstText(order.courier_name, order.nama_kurir, order.kurir, order.shipping_courier);
 }
 
-function courierLogo(order: Order) {
-  return firstText(order.courier_logo_url, order.logo_kurir);
-}
-
 function trackingUrl(order: Order) {
   return firstText(order.tracking_url, order.link_tracking);
 }
@@ -714,7 +710,6 @@ export default function OrdersPage() {
             const ongkir = orderOngkir(order);
             const grandTotal = orderGrandTotal(order);
             const resi = trackingNumber(order);
-            const logo = courierLogo(order);
             const canUploadProof = status === "menunggu_pembayaran" || status === "menunggu_konfirmasi";
 
             return (
@@ -850,7 +845,6 @@ export default function OrdersPage() {
                     {resi ? (
                       <div className="grid gap-2">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span>Nomor resi:</span>
                           <strong className="text-slate-950">{resi}</strong>
                           <button
                             type="button"
@@ -861,7 +855,6 @@ export default function OrdersPage() {
                             {copiedKey === `resi-${order.id}` ? <span className="text-emerald-600">✓</span> : "Copy"}
                           </button>
                         </div>
-                        <p className="font-bold text-slate-950">{courierName(order) || "-"}</p>
                       </div>
                     ) : (
                       <p>Nomor resi belum ada</p>
@@ -875,36 +868,6 @@ export default function OrdersPage() {
                       </div>
                     )}
 
-                    {status === "pesanan_dikirim" && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 lg:col-span-3">
-                        <div className="flex items-start gap-3">
-                          {logo && <img src={logo} alt={courierName(order) || "Logo kurir"} className="h-12 w-16 rounded-md bg-white object-contain p-2" />}
-                          <div>
-                            <h3 className="font-bold text-emerald-950">{courierName(order) || "Kurir"}</h3>
-                            <p className="text-sm text-emerald-800">Resi: <strong>{resi || "-"}</strong></p>
-                          </div>
-                        </div>
-                        {resi && (
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(resi)}`}
-                            alt="QR Code Resi"
-                            className="mt-4 h-32 w-32 rounded-md bg-white p-2"
-                          />
-                        )}
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {resi && (
-                            <button onClick={() => copyTrackingNumber(resi, `${order.id}-shipping`)} className="rounded-md bg-white px-3 py-2 text-xs font-bold text-emerald-700">
-                              {copiedKey === `resi-${order.id}-shipping` ? <span className="text-emerald-600">✓</span> : "Copy Resi"}
-                            </button>
-                          )}
-                          {trackingUrl(order) && (
-                            <a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                              Cek Resi
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
               </article>
             );
