@@ -301,10 +301,12 @@ async function updateOrderWithRequiredCourier(orderId: string, payload: Row, cou
   const adaptivePayload = { ...payload };
   let error: { message: string } | null = null;
   let missingRequiredCourier = false;
+  let savedOrder = null as Order | null;
 
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId);
+    const result = await supabase.from("orders").update(adaptivePayload).eq("id", orderId).select("*").maybeSingle();
     error = result.error;
+    savedOrder = result.data as Order | null;
 
     const missingColumn = getMissingColumn(error?.message);
     if (!missingColumn) break;
@@ -317,7 +319,7 @@ async function updateOrderWithRequiredCourier(orderId: string, payload: Row, cou
     delete adaptivePayload[missingColumn];
   }
 
-  return { error, missingRequiredCourier };
+  return { error, missingRequiredCourier, savedOrder };
 }
 
 function makeDraft(order: Order): Draft {
@@ -542,7 +544,7 @@ export default function AdminOrdersPage() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error, missingRequiredCourier } = await updateOrderWithRequiredCourier(order.id, payload, courierColumn);
+      const { error, missingRequiredCourier, savedOrder } = await updateOrderWithRequiredCourier(order.id, payload, courierColumn);
       lastError = error;
 
       if (isStatusConstraintError(error?.message)) {
@@ -551,7 +553,11 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      if (!error && !missingRequiredCourier) {
+      const trackingSaved = savedOrder ? trackingNumber(savedOrder) === tracking : false;
+      const courierSaved = savedOrder ? courierName(savedOrder) === selectedCourier : false;
+      const shippedSaved = savedOrder ? normalizeStatus(savedOrder) === "pesanan_dikirim" : false;
+
+      if (!error && !missingRequiredCourier && trackingSaved && courierSaved && shippedSaved) {
         await loadOrders();
         setDrafts((current) => ({
           ...current,
@@ -564,6 +570,12 @@ export default function AdminOrdersPage() {
         setMessage(`Resi dan nama kurir ${selectedCourier} berhasil disimpan. Status pesanan menjadi Sedang Dikirim.`);
         setSavingId("");
         return;
+      }
+
+      if (!error && !missingRequiredCourier) {
+        lastError = {
+          message: "Data resi belum tersimpan sempurna. Pastikan kolom tracking_number, courier_name, dan status tersedia di tabel orders.",
+        };
       }
     }
 
