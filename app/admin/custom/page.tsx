@@ -35,6 +35,11 @@ type FooterSettings = {
   copyright_text: string;
 };
 
+type CourierSetting = {
+  id: string;
+  name: string;
+};
+
 const defaultSiteSettings: SiteSettings = {
   store_name: "Tokoku",
   welcome_template: "{greeting}, {name}",
@@ -66,6 +71,8 @@ export default function AdminCustomPage() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSiteSettings);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
+  const [couriers, setCouriers] = useState<CourierSetting[]>([]);
+  const [newCourierName, setNewCourierName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
   const [paymentLogoFile, setPaymentLogoFile] = useState<File | null>(null);
@@ -95,15 +102,17 @@ export default function AdminCustomPage() {
 
       setProfile(profileData);
 
-      const [siteResult, paymentResult, footerResult] = await Promise.all([
+      const [siteResult, paymentResult, footerResult, courierResult] = await Promise.all([
         supabase.from("site_settings").select("store_name,welcome_template,welcome_description").eq("id", true).maybeSingle(),
         supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
         supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
+        supabase.from("courier_settings").select("id,name").order("name", { ascending: true }),
       ]);
 
       if (siteResult.data) setSiteSettings({ ...defaultSiteSettings, ...siteResult.data });
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
+      if (courierResult.data) setCouriers(courierResult.data as CourierSetting[]);
       setLoading(false);
     }
 
@@ -182,6 +191,49 @@ export default function AdminCustomPage() {
 
     setSaving("");
     showResult(!error, error ? error.message : "Footer berhasil diedit.");
+  }
+
+  async function addCourier(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const courierName = newCourierName.trim();
+    if (!courierName || saving) return;
+
+    setSaving("courier");
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("courier_settings")
+      .insert({ name: courierName })
+      .select("id,name")
+      .single();
+
+    setSaving("");
+    if (error) {
+      showResult(false, error.message);
+      return;
+    }
+
+    setCouriers((current) => [...current, data as CourierSetting].sort((left, right) => left.name.localeCompare(right.name)));
+    setNewCourierName("");
+    showResult(true, "Kurir berhasil ditambahkan.");
+  }
+
+  async function deleteCourier(courier: CourierSetting) {
+    if (!window.confirm(`Hapus kurir ${courier.name}?`)) return;
+
+    setSaving(`courier-${courier.id}`);
+    setMessage("");
+
+    const { error } = await supabase.from("courier_settings").delete().eq("id", courier.id);
+
+    setSaving("");
+    if (error) {
+      showResult(false, error.message);
+      return;
+    }
+
+    setCouriers((current) => current.filter((item) => item.id !== courier.id));
+    showResult(true, "Kurir berhasil dihapus.");
   }
 
   if (loading) {
@@ -321,6 +373,41 @@ export default function AdminCustomPage() {
           <button type="submit" disabled={saving === "footer"} className="mt-5 rounded-md bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
             {saving === "footer" ? "Menyimpan..." : "Simpan Footer"}
           </button>
+        </form>
+
+        <form onSubmit={addCourier} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Tambah Kurir</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input
+              value={newCourierName}
+              onChange={(event) => setNewCourierName(event.target.value)}
+              placeholder="Contoh: JNT, JNE, SiCepat"
+              className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-rose-400"
+            />
+            <button type="submit" disabled={saving === "courier"} className="rounded-md bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
+              {saving === "courier" ? "Menyimpan..." : "Tambah Kurir"}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {couriers.map((courier) => (
+              <div key={courier.id} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+                <span className="text-sm font-bold text-slate-700">{courier.name}</span>
+                <button
+                  type="button"
+                  onClick={() => deleteCourier(courier)}
+                  disabled={saving === `courier-${courier.id}`}
+                  className="text-xs font-bold text-rose-600 disabled:opacity-50"
+                >
+                  Hapus
+                </button>
+              </div>
+            ))}
+            {couriers.length === 0 && (
+              <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
+                Belum ada kurir. Tambahkan nama kurir agar bisa dipilih di halaman pesanan.
+              </p>
+            )}
+          </div>
         </form>
       </section>
     </main>

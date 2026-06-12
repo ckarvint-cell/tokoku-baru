@@ -84,6 +84,11 @@ type Draft = {
   trackingUrl: string;
 };
 
+type CourierSetting = {
+  id: string;
+  name: string;
+};
+
 type StoredPaymentProof = {
   name: string;
   created_at?: string | null;
@@ -306,6 +311,7 @@ export default function AdminOrdersPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [couriers, setCouriers] = useState<CourierSetting[]>([]);
   const [filter, setFilter] = useState<FilterStatus>("semua");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
@@ -330,7 +336,7 @@ export default function AdminOrdersPage() {
       }
 
       setProfile(profileData as Profile);
-      await loadOrders();
+      await Promise.all([loadOrders(), loadCouriers()]);
       setLoading(false);
     }
 
@@ -345,6 +351,11 @@ export default function AdminOrdersPage() {
       setOrders(nextOrders);
       setDrafts(Object.fromEntries(nextOrders.map((order) => [order.id, makeDraft(order)])));
     }
+  }
+
+  async function loadCouriers() {
+    const { data } = await supabase.from("courier_settings").select("id,name").order("name", { ascending: true });
+    if (data) setCouriers(data as CourierSetting[]);
   }
 
   function updateDraft(orderId: string, key: keyof Draft, value: string) {
@@ -466,31 +477,11 @@ export default function AdminOrdersPage() {
     );
   }
 
-  async function uploadCourierLogo(order: Order, file: File | undefined) {
-    if (!file) return;
-
-    setSavingId(order.id);
-    setMessage("");
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const path = `courier-logos/${order.id}-${crypto.randomUUID()}-${safeName}`;
-    const { error } = await supabase.storage.from("payment-assets").upload(path, file, { upsert: false });
-
-    if (error) {
-      setMessage(error.message);
-      setSavingId("");
-      return;
-    }
-
-    const { data } = supabase.storage.from("payment-assets").getPublicUrl(path);
-    updateDraft(order.id, "courierLogoUrl", data.publicUrl);
-    setSavingId("");
-  }
-
   async function saveTracking(order: Order) {
     const draft = drafts[order.id];
     const status = normalizeStatus(order);
     const tracking = draft?.trackingNumber?.trim() || "";
+    const selectedCourier = draft?.courierName?.trim() || "";
 
     if (status !== "proses") {
       setMessage("Resi hanya bisa dikirim setelah pesanan berstatus Proses.");
@@ -502,6 +493,11 @@ export default function AdminOrdersPage() {
       return;
     }
 
+    if (!selectedCourier) {
+      setMessage("Nama kurir wajib dipilih sebelum kirim resi.");
+      return;
+    }
+
     await updateOrder(
       order.id,
       {
@@ -509,12 +505,8 @@ export default function AdminOrdersPage() {
         status_pesanan: "pesanan_dikirim",
         tracking_number: tracking,
         nomor_resi: tracking,
-        courier_name: draft?.courierName || null,
-        nama_kurir: draft?.courierName || null,
-        courier_logo_url: draft?.courierLogoUrl || null,
-        logo_kurir: draft?.courierLogoUrl || null,
-        tracking_url: draft?.trackingUrl || null,
-        link_tracking: draft?.trackingUrl || null,
+        courier_name: selectedCourier,
+        nama_kurir: selectedCourier,
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
@@ -648,7 +640,10 @@ export default function AdminOrdersPage() {
             const totalProduk = orderTotalProduk(order);
             const ongkir = orderOngkir(order);
             const grandTotal = orderGrandTotal(order);
-            const canSendTracking = status === "proses" && Boolean(draft.trackingNumber.trim());
+            const courierOptions = draft.courierName && !couriers.some((courier) => courier.name === draft.courierName)
+              ? [...couriers, { id: "current", name: draft.courierName }]
+              : couriers;
+            const canSendTracking = status === "proses" && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
 
             return (
               <article key={order.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -693,14 +688,9 @@ export default function AdminOrdersPage() {
                   <div className="rounded-lg border border-slate-200 p-4">
                     <h3 className="font-bold">Bukti Transfer</h3>
                     {proof ? (
-                      <>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                          <img src={proof} alt="Bukti pembayaran customer" className="max-h-56 w-full object-contain" />
-                        </a>
-                        <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                          Lihat file penuh
-                        </a>
-                      </>
+                      <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block w-28 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                        <img src={proof} alt="Bukti pembayaran customer" className="h-28 w-full object-contain" />
+                      </a>
                     ) : (
                       <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                         Belum ada bukti transfer.
@@ -733,21 +723,30 @@ export default function AdminOrdersPage() {
                           className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium outline-none focus:border-rose-400"
                         />
                       </label>
-                      <label className="grid grid-cols-[72px_1fr] items-center gap-3 text-sm font-bold text-slate-700">
-                        Resi
-                        <input
-                          value={draft.trackingNumber}
-                          onChange={(event) => updateDraft(order.id, "trackingNumber", event.target.value)}
-                          placeholder="Nomor resi"
-                          className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
-                      </label>
-                      <input
-                        value={draft.courierName}
-                        onChange={(event) => updateDraft(order.id, "courierName", event.target.value)}
-                        placeholder="Nama kurir"
-                        className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-2 text-sm font-bold text-slate-700">
+                          Nomor Resi
+                          <input
+                            value={draft.trackingNumber}
+                            onChange={(event) => updateDraft(order.id, "trackingNumber", event.target.value)}
+                            placeholder="Nomor resi"
+                            className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm font-bold text-slate-700">
+                          Nama Kurir
+                          <select
+                            value={draft.courierName}
+                            onChange={(event) => updateDraft(order.id, "courierName", event.target.value)}
+                            className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                          >
+                            <option value="">Pilih kurir</option>
+                            {courierOptions.map((courier) => (
+                              <option key={courier.id} value={courier.name}>{courier.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <button
                           disabled={savingId === order.id}
@@ -764,24 +763,6 @@ export default function AdminOrdersPage() {
                           Kirim Resi
                         </button>
                       </div>
-                      <label className="grid gap-2 text-sm font-bold text-slate-700">
-                        Logo kurir
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) => uploadCourierLogo(order, event.target.files?.[0])}
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                        />
-                      </label>
-                      {draft.courierLogoUrl && (
-                        <img src={draft.courierLogoUrl} alt="Logo kurir" className="h-14 w-24 rounded-md border border-slate-200 object-contain p-2" />
-                      )}
-                      <input
-                        value={draft.trackingUrl}
-                        onChange={(event) => updateDraft(order.id, "trackingUrl", event.target.value)}
-                        placeholder="Link tracking / cek resi"
-                        className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                      />
                     </div>
                   </div>
 

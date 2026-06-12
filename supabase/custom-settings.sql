@@ -30,6 +30,12 @@ create table if not exists public.footer_settings (
   constraint footer_settings_singleton check (id = true)
 );
 
+create table if not exists public.courier_settings (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
 insert into public.site_settings (id)
 values (true)
 on conflict (id) do nothing;
@@ -45,6 +51,7 @@ on conflict (id) do nothing;
 alter table public.site_settings enable row level security;
 alter table public.payment_settings enable row level security;
 alter table public.footer_settings enable row level security;
+alter table public.courier_settings enable row level security;
 
 drop policy if exists "Anyone can read site settings" on public.site_settings;
 create policy "Anyone can read site settings"
@@ -86,6 +93,21 @@ using (true);
 drop policy if exists "Admins can manage footer settings" on public.footer_settings;
 create policy "Admins can manage footer settings"
 on public.footer_settings
+for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Authenticated users can read courier settings" on public.courier_settings;
+create policy "Authenticated users can read courier settings"
+on public.courier_settings
+for select
+to authenticated
+using (true);
+
+drop policy if exists "Admins can manage courier settings" on public.courier_settings;
+create policy "Admins can manage courier settings"
+on public.courier_settings
 for all
 to authenticated
 using (public.is_admin())
