@@ -100,6 +100,15 @@ function formatCurrency(value: number | null | undefined) {
   return `Rp ${asNumber(value).toLocaleString("id-ID")}`;
 }
 
+function formatNumberInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits).toLocaleString("id-ID") : "";
+}
+
+function parseNumberInput(value: string | undefined) {
+  return Number((value || "").replace(/\D/g, "")) || 0;
+}
+
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
   if (raw.includes("tolak")) return "ditolak";
@@ -233,7 +242,7 @@ function isStatusConstraintError(errorMessage: string | undefined) {
 
 function makeDraft(order: Order): Draft {
   return {
-    shippingCost: String(orderOngkir(order) || ""),
+    shippingCost: orderOngkir(order) ? formatNumberInput(String(orderOngkir(order))) : "",
     courierName: courierName(order),
     rejectReason: firstText(order.payment_rejected_reason, order.alasan_penolakan),
     trackingNumber: trackingNumber(order),
@@ -251,6 +260,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
+  const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     async function checkAccessAndLoad() {
@@ -335,7 +345,7 @@ export default function AdminOrdersPage() {
 
   async function saveShipping(order: Order) {
     const draft = drafts[order.id];
-    const shippingCost = Number(draft?.shippingCost || 0);
+    const shippingCost = parseNumberInput(draft?.shippingCost);
     const totalProduk = orderTotalProduk(order);
 
     if (shippingCost < 0) {
@@ -578,75 +588,90 @@ export default function AdminOrdersPage() {
                   </span>
                 </div>
 
-                <div className="grid gap-5 p-5 xl:grid-cols-[1fr_360px]">
-                  <div className="grid gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Produk</h3>
-                      <div className="mt-3 grid gap-2">
-                        {order.order_items.map((item) => (
-                          <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                            <div className="flex justify-between gap-3">
-                              <span>{itemName(item)} x {itemQty(item)}</span>
-                              <strong>{formatCurrency(itemSubtotal(item))}</strong>
-                            </div>
-                            {itemNote(item) && <p className="mt-1 text-xs text-slate-500">Catatan: {itemNote(item)}</p>}
+                <div className="grid gap-4 p-5 xl:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <h3 className="font-bold">Detail Produk</h3>
+                    <div className="mt-3 grid gap-2">
+                      {order.order_items.map((item) => (
+                        <div key={item.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <div className="flex justify-between gap-3">
+                            <span>{itemName(item)} x {itemQty(item)}</span>
+                            <strong>{formatCurrency(itemSubtotal(item))}</strong>
                           </div>
-                        ))}
-                      </div>
+                          {itemNote(item) && <p className="mt-1 text-xs text-slate-500">Catatan: {itemNote(item)}</p>}
+                        </div>
+                      ))}
                     </div>
+                  </div>
 
-                    <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
-                      <h3 className="mb-2 font-bold text-slate-950">Alamat Customer</h3>
-                      <p>Nama: {orderName(order) || "-"}</p>
-                      <p>WhatsApp: {orderPhone(order) || "-"}</p>
-                      <p>Alamat: {orderAddress(order) || "-"}</p>
-                      {orderMaps(order) && (
-                        <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
-                          Buka titik Google Maps
-                        </a>
-                      )}
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <h3 className="font-bold">Total Produk</h3>
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
+                      <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
+                      <div className="flex justify-between border-t border-slate-200 pt-2 text-base"><span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong></div>
                     </div>
+                  </div>
 
-                    {proof && (
-                      <div className="rounded-lg border border-slate-200 p-4">
-                        <h3 className="font-bold">Bukti Pembayaran</h3>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <h3 className="font-bold">Bukti Transfer</h3>
+                    {proof ? (
+                      <>
                         <a href={proof} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                          <img src={proof} alt="Bukti pembayaran customer" className="max-h-80 w-full object-contain" />
+                          <img src={proof} alt="Bukti pembayaran customer" className="max-h-56 w-full object-contain" />
                         </a>
                         <a href={proof} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white">
                           Lihat file penuh
                         </a>
+                      </>
+                    ) : (
+                      <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                        Belum ada bukti transfer.
                       </div>
                     )}
                   </div>
 
-                  <div className="grid content-start gap-4">
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Total</h3>
-                      <div className="mt-3 grid gap-2 text-sm">
-                        <div className="flex justify-between"><span>Total Produk</span><strong>{formatCurrency(totalProduk)}</strong></div>
-                        <div className="flex justify-between"><span>Ongkir</span><strong>{formatCurrency(ongkir)}</strong></div>
-                        <div className="flex justify-between border-t border-slate-200 pt-2 text-base"><span>Grand Total</span><strong>{formatCurrency(grandTotal)}</strong></div>
-                      </div>
-                    </div>
+                  <div className="rounded-lg border border-slate-200 p-4 text-sm leading-6 text-slate-600">
+                    <h3 className="mb-2 font-bold text-slate-950">Alamat Customer</h3>
+                    <p>Nama: {orderName(order) || "-"}</p>
+                    <p>WhatsApp: {orderPhone(order) || "-"}</p>
+                    <p>Alamat: {orderAddress(order) || "-"}</p>
+                    {orderMaps(order) && (
+                      <a href={orderMaps(order)} target="_blank" rel="noreferrer" className="font-bold text-rose-600">
+                        Buka titik Google Maps
+                      </a>
+                    )}
+                  </div>
 
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Ongkir</h3>
-                      <div className="mt-3 grid gap-3">
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <h3 className="font-bold">Ongkir & Nomor Resi</h3>
+                    <div className="mt-3 grid gap-3">
+                      <label className="grid grid-cols-[72px_1fr] items-center gap-3 text-sm font-bold text-slate-700">
+                        Ongkir
                         <input
                           value={draft.shippingCost}
-                          onChange={(event) => updateDraft(order.id, "shippingCost", event.target.value)}
-                          type="number"
-                          min="0"
-                          placeholder="Ongkir"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                          onChange={(event) => updateDraft(order.id, "shippingCost", formatNumberInput(event.target.value))}
+                          inputMode="numeric"
+                          placeholder="10.000"
+                          className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium outline-none focus:border-rose-400"
                         />
+                      </label>
+                      <label className="grid grid-cols-[72px_1fr] items-center gap-3 text-sm font-bold text-slate-700">
+                        Resi
                         <input
-                          value={draft.courierName}
-                          onChange={(event) => updateDraft(order.id, "courierName", event.target.value)}
-                          placeholder="Nama kurir opsional"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                          value={draft.trackingNumber}
+                          onChange={(event) => updateDraft(order.id, "trackingNumber", event.target.value)}
+                          placeholder="Nomor resi"
+                          className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
                         />
+                      </label>
+                      <input
+                        value={draft.courierName}
+                        onChange={(event) => updateDraft(order.id, "courierName", event.target.value)}
+                        placeholder="Nama kurir"
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                      />
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <button
                           disabled={savingId === order.id}
                           onClick={() => saveShipping(order)}
@@ -654,84 +679,59 @@ export default function AdminOrdersPage() {
                         >
                           Simpan Ongkir
                         </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Verifikasi Pesanan</h3>
-                      <div className="mt-3 grid gap-3">
-                        <button
-                          disabled={savingId === order.id || !proof}
-                          onClick={() => approvePayment(order)}
-                          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                        >
-                          Approve Pembayaran
-                        </button>
-                        <textarea
-                          value={draft.rejectReason}
-                          onChange={(event) => updateDraft(order.id, "rejectReason", event.target.value)}
-                          placeholder="Alasan penolakan"
-                          rows={3}
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
-                        <button
-                          disabled={savingId === order.id}
-                          onClick={() => rejectPayment(order)}
-                          className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                        >
-                          Tolak Pesanan
-                        </button>
-                        <button
-                          disabled={savingId === order.id}
-                          onClick={() => deleteOrder(order)}
-                          className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
-                        >
-                          Hapus Pesanan
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 p-4">
-                      <h3 className="font-bold">Pengiriman / Resi</h3>
-                      <div className="mt-3 grid gap-3">
-                        <input
-                          value={draft.trackingNumber}
-                          onChange={(event) => updateDraft(order.id, "trackingNumber", event.target.value)}
-                          placeholder="Nomor resi"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
-                        <input
-                          value={draft.courierName}
-                          onChange={(event) => updateDraft(order.id, "courierName", event.target.value)}
-                          placeholder="Nama kurir"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
-                        <label className="grid gap-2 text-sm font-bold text-slate-700">
-                          Logo kurir
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(event) => uploadCourierLogo(order, event.target.files?.[0])}
-                            className="rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                          />
-                        </label>
-                        {draft.courierLogoUrl && (
-                          <img src={draft.courierLogoUrl} alt="Logo kurir" className="h-14 w-24 rounded-md border border-slate-200 object-contain p-2" />
-                        )}
-                        <input
-                          value={draft.trackingUrl}
-                          onChange={(event) => updateDraft(order.id, "trackingUrl", event.target.value)}
-                          placeholder="Link tracking / cek resi"
-                          className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
-                        />
                         <button
                           disabled={savingId === order.id}
                           onClick={() => saveTracking(order)}
                           className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
-                          Simpan Pengiriman
+                          Simpan Resi
                         </button>
                       </div>
+                      <label className="grid gap-2 text-sm font-bold text-slate-700">
+                        Logo kurir
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => uploadCourierLogo(order, event.target.files?.[0])}
+                          className="rounded-md border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
+                        />
+                      </label>
+                      {draft.courierLogoUrl && (
+                        <img src={draft.courierLogoUrl} alt="Logo kurir" className="h-14 w-24 rounded-md border border-slate-200 object-contain p-2" />
+                      )}
+                      <input
+                        value={draft.trackingUrl}
+                        onChange={(event) => updateDraft(order.id, "trackingUrl", event.target.value)}
+                        placeholder="Link tracking / cek resi"
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <h3 className="font-bold">Verifikasi Pesanan</h3>
+                    <div className="mt-3 grid gap-3">
+                      <button
+                        disabled={savingId === order.id || !proof}
+                        onClick={() => approvePayment(order)}
+                        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        Approve Pembayaran
+                      </button>
+                      <button
+                        disabled={savingId === order.id}
+                        onClick={() => setRejectingOrder(order)}
+                        className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        Tolak Pesanan
+                      </button>
+                      <button
+                        disabled={savingId === order.id}
+                        onClick={() => deleteOrder(order)}
+                        className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
+                      >
+                        Hapus Pesanan
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -743,6 +743,45 @@ export default function AdminOrdersPage() {
         {filteredOrders.length === 0 && (
           <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">
             Belum ada pesanan untuk filter ini.
+          </div>
+        )}
+
+        {rejectingOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6">
+            <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Tolak Pesanan</p>
+              <h2 className="mt-2 text-xl font-bold">Pesanan #{rejectingOrder.id.slice(0, 8)}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Isi alasan penolakan agar customer bisa melihat kenapa pesanan ditolak.
+              </p>
+              <textarea
+                value={(drafts[rejectingOrder.id] || makeDraft(rejectingOrder)).rejectReason}
+                onChange={(event) => updateDraft(rejectingOrder.id, "rejectReason", event.target.value)}
+                placeholder="Contoh: Bukti transfer belum sesuai dengan total pembayaran."
+                rows={4}
+                className="mt-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+              />
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setRejectingOrder(null)}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={savingId === rejectingOrder.id}
+                  onClick={async () => {
+                    await rejectPayment(rejectingOrder);
+                    setRejectingOrder(null);
+                  }}
+                  className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  Confirm Tolak
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>
