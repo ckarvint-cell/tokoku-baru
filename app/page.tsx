@@ -78,6 +78,8 @@ const defaultPaymentSettings: PaymentSettings = {
 const officialPaymentWarning =
   "Transfer hanya dilakukan ke rekening resmi di bawah ini setelah ongkir ditentukan dan Grand Total tampil di Daftar Pesanan. Pembayaran di luar rekening resmi toko tidak menjadi tanggung jawab kami. Terima kasih atas pengertiannya.";
 
+const PRODUCTS_PER_PAGE = 40;
+
 const defaultFooterSettings: FooterSettings = {
   store_name: "Tokoku",
   address: "",
@@ -224,23 +226,23 @@ function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: 
           </>
         )}
       </div>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-bold">{product.nama_produk}</h3>
-            <p className="mt-1 text-sm text-slate-500">{product.kategori || "Tanpa kategori"}</p>
+      <div className="p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="line-clamp-2 text-sm font-bold sm:text-base">{product.nama_produk}</h3>
+            <p className="mt-1 truncate text-xs text-slate-500 sm:text-sm">{product.kategori || "Tanpa kategori"}</p>
           </div>
           <div className="grid gap-1 text-right">
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Stok {product.stok}</span>
-            <span className="text-xs font-medium text-slate-400">Terjual {product.total_dibeli || 0}</span>
+            <span className="rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 sm:text-xs">Stok {product.stok}</span>
+            <span className="text-[10px] font-medium text-slate-400 sm:text-xs">Terjual {product.total_dibeli || 0}</span>
           </div>
         </div>
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{product.deskripsi || "Belum ada deskripsi."}</p>
-        <div className="mt-5 flex items-end justify-between gap-3">
+        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600 sm:text-sm">{product.deskripsi || "Belum ada deskripsi."}</p>
+        <div className="mt-4 grid gap-3 sm:flex sm:items-end sm:justify-between">
           <div>
-            <p className="text-lg font-bold"><span className="text-[0.5em] align-super">Rp</span> {finalPrice.toLocaleString("id-ID")}</p>
+            <p className="text-sm font-bold sm:text-base"><span className="text-[0.5em] align-super">Rp</span> {finalPrice.toLocaleString("id-ID")}</p>
             {product.harga_diskon && (
-              <p className="text-sm text-slate-400">
+              <p className="text-xs text-slate-400">
                 <span className="text-[0.5em] align-middle">Rp</span> <span className="line-through decoration-slate-400 decoration-1">{Number(product.harga).toLocaleString("id-ID")}</span>
               </p>
             )}
@@ -248,7 +250,7 @@ function ProductCard({ product, onAddToCart }: { product: Product; onAddToCart: 
           <button
             type="button"
             onClick={() => onAddToCart(product)}
-            className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600"
+            className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-rose-600 sm:text-sm"
           >
             Keranjang
           </button>
@@ -631,6 +633,7 @@ function CheckoutPanel({
 export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [now, setNow] = useState(new Date());
   const [notice, setNotice] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -705,6 +708,7 @@ export default function Home() {
 
       if (data) {
         setProducts(data as Product[]);
+        setCurrentPage(1);
       }
     }
 
@@ -1004,6 +1008,9 @@ export default function Home() {
   const name = profile?.full_name || "Pengunjung";
   const cartQty = cart.reduce((total, item) => total + item.qty, 0);
   const welcomeText = formatWelcome(siteSettings.welcome_template, getGreeting(), name);
+  const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedProducts = products.slice((safeCurrentPage - 1) * PRODUCTS_PER_PAGE, safeCurrentPage * PRODUCTS_PER_PAGE);
 
   return (
     <main className="min-h-screen bg-[#fbf7f4] text-slate-950">
@@ -1015,44 +1022,40 @@ export default function Home() {
             </Link>
             <h1 className="mt-1 text-2xl font-bold">Katalog Produk</h1>
           </div>
-          <nav className="flex flex-wrap gap-2">
-            {profile && (
-              <Link href="/orders" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium">
-                Daftar Pesanan
-              </Link>
-            )}
-            {profile && (
-              <Link href="/settings" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium">
-                Setting
-              </Link>
-            )}
-            {profile?.role === "admin" && (
-              <Link href="/admin" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">
-                Admin
-              </Link>
-            )}
-            {profile ? (
-              <button onClick={logout} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white">
-                Logout
+          <div className="flex flex-col gap-3 sm:items-end">
+            <div className="w-fit rounded-md border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-slate-700">
+              Jam <span className="font-mono text-slate-950">{now.toLocaleTimeString("id-ID", { hour12: false })}</span>
+            </div>
+            <nav className="flex flex-wrap gap-2">
+              {profile && (
+                <Link href="/orders" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium">
+                  Daftar Pesanan
+                </Link>
+              )}
+              {profile?.role === "admin" && (
+                <Link href="/admin" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">
+                  Admin
+                </Link>
+              )}
+              {!profile && (
+                <>
+                  <Link href="/login" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium">
+                    Login
+                  </Link>
+                  <Link href="/signup" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">
+                    Daftar
+                  </Link>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Keranjang ({cartQty})
               </button>
-            ) : (
-              <>
-                <Link href="/login" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium">
-                  Login
-                </Link>
-                <Link href="/signup" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">
-                  Daftar
-                </Link>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white"
-            >
-              Keranjang ({cartQty})
-            </button>
-          </nav>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -1063,7 +1066,7 @@ export default function Home() {
           </div>
         )}
 
-        <div className="grid gap-6 rounded-lg border border-rose-100 bg-white p-6 shadow-sm md:grid-cols-[1fr_280px] md:p-8">
+        <div className="rounded-lg border border-rose-100 bg-white p-6 shadow-sm md:p-8">
           <div>
             <p className="text-sm font-medium text-rose-600">
               {now.toLocaleDateString("id-ID", {
@@ -1078,14 +1081,6 @@ export default function Home() {
               {siteSettings.welcome_description || defaultSiteSettings.welcome_description}
             </p>
           </div>
-          <div className="flex items-center justify-center rounded-lg bg-rose-50 p-6">
-            <div className="rounded-lg bg-white px-8 py-6 text-center shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-[0.35em] text-slate-500">Jam</p>
-              <p className="mt-3 text-4xl font-bold">
-                {now.toLocaleTimeString("id-ID", { hour12: false })}
-              </p>
-            </div>
-          </div>
         </div>
 
         <section className="mt-10">
@@ -1097,8 +1092,8 @@ export default function Home() {
             <p className="text-sm text-slate-500">Produk dari dashboard admin akan tampil di sini.</p>
           </div>
 
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
+          <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+            {paginatedProducts.map((product) => (
               <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
             ))}
           </div>
@@ -1106,6 +1101,44 @@ export default function Home() {
           {products.length === 0 && (
             <div className="mt-6 rounded-lg border border-dashed border-rose-200 bg-white px-5 py-10 text-center text-sm text-slate-500">
               Belum ada produk aktif. Tambahkan produk dari halaman admin.
+            </div>
+          )}
+
+          {products.length > PRODUCTS_PER_PAGE && (
+            <div className="mt-8 flex flex-col gap-3 rounded-lg border border-rose-100 bg-white px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="font-medium text-slate-600">
+                Halaman {safeCurrentPage} dari {totalPages}. Menampilkan {paginatedProducts.length} dari {products.length} produk.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="rounded-md border border-slate-300 px-4 py-2 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Sebelumnya
+                </button>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`rounded-md px-4 py-2 font-bold ${
+                      page === safeCurrentPage ? "bg-slate-950 text-white" : "border border-slate-300 text-slate-700"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="rounded-md border border-slate-300 px-4 py-2 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Berikutnya
+                </button>
+              </div>
             </div>
           )}
         </section>
@@ -1133,6 +1166,16 @@ export default function Home() {
             <p className="mt-3 leading-6">{footerSettings.copyright_text || defaultFooterSettings.copyright_text}</p>
           </div>
         </div>
+        {profile && (
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 border-t border-rose-100 px-5 py-5">
+            <Link href="/settings" className="rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-slate-700">
+              Setting
+            </Link>
+            <button onClick={logout} className="rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white">
+              Logout
+            </button>
+          </div>
+        )}
       </footer>
 
       {cartOpen && (
