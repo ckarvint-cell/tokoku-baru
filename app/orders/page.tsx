@@ -763,8 +763,7 @@ export default function OrdersPage() {
                       </div>
                     )}
                     {canUploadProof && (
-                      <label className="mt-3 grid gap-2 text-xs font-bold text-emerald-950">
-                        {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
+                      <label className="mt-3 block">
                         <input
                           type="file"
                           accept="image/*"
