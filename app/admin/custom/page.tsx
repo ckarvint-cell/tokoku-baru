@@ -102,17 +102,18 @@ export default function AdminCustomPage() {
 
       setProfile(profileData);
 
-      const [siteResult, paymentResult, footerResult, courierResult] = await Promise.all([
+      const [siteResult, paymentResult, footerResult] = await Promise.all([
         supabase.from("site_settings").select("store_name,welcome_template,welcome_description").eq("id", true).maybeSingle(),
         supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url,payment_note").eq("id", true).maybeSingle(),
         supabase.from("footer_settings").select("store_name,address,whatsapp,email,instagram,copyright_text").eq("id", true).maybeSingle(),
-        supabase.from("courier_settings").select("id,name").order("name", { ascending: true }),
       ]);
 
       if (siteResult.data) setSiteSettings({ ...defaultSiteSettings, ...siteResult.data });
       if (paymentResult.data) setPaymentSettings({ ...defaultPaymentSettings, ...paymentResult.data });
       if (footerResult.data) setFooterSettings({ ...defaultFooterSettings, ...footerResult.data });
-      if (courierResult.data) setCouriers(courierResult.data as CourierSetting[]);
+
+      const { data: courierData } = await supabase.from("courier_settings").select("id,name").order("name", { ascending: true });
+      if (courierData) setCouriers(courierData as CourierSetting[]);
       setLoading(false);
     }
 
@@ -122,6 +123,30 @@ export default function AdminCustomPage() {
   function showResult(ok: boolean, text: string) {
     setSuccess(ok);
     setMessage(text);
+  }
+
+  function courierErrorMessage(text: string) {
+    if (text.includes("courier_settings") || text.includes("schema cache")) {
+      return "Tabel courier_settings belum ada. Jalankan SQL custom-settings terbaru di Supabase.";
+    }
+
+    if (text.toLowerCase().includes("duplicate key")) {
+      return "Nama kurir sudah ada.";
+    }
+
+    return text;
+  }
+
+  async function refreshCouriers(showError = true) {
+    const { data, error } = await supabase.from("courier_settings").select("id,name").order("name", { ascending: true });
+
+    if (error) {
+      if (showError) showResult(false, courierErrorMessage(error.message));
+      return false;
+    }
+
+    setCouriers((data || []) as CourierSetting[]);
+    return true;
   }
 
   async function saveSiteSettings(event: FormEvent<HTMLFormElement>) {
@@ -201,19 +226,18 @@ export default function AdminCustomPage() {
     setSaving("courier");
     setMessage("");
 
-    const { data, error } = await supabase
-      .from("courier_settings")
-      .insert({ name: courierName })
-      .select("id,name")
-      .single();
+    const { error } = await supabase.from("courier_settings").insert({ name: courierName });
 
-    setSaving("");
     if (error) {
-      showResult(false, error.message);
+      setSaving("");
+      showResult(false, courierErrorMessage(error.message));
       return;
     }
 
-    setCouriers((current) => [...current, data as CourierSetting].sort((left, right) => left.name.localeCompare(right.name)));
+    const refreshed = await refreshCouriers();
+    setSaving("");
+    if (!refreshed) return;
+
     setNewCourierName("");
     showResult(true, "Kurir berhasil ditambahkan.");
   }
@@ -226,13 +250,16 @@ export default function AdminCustomPage() {
 
     const { error } = await supabase.from("courier_settings").delete().eq("id", courier.id);
 
-    setSaving("");
     if (error) {
-      showResult(false, error.message);
+      setSaving("");
+      showResult(false, courierErrorMessage(error.message));
       return;
     }
 
-    setCouriers((current) => current.filter((item) => item.id !== courier.id));
+    const refreshed = await refreshCouriers();
+    setSaving("");
+    if (!refreshed) return;
+
     showResult(true, "Kurir berhasil dihapus.");
   }
 
