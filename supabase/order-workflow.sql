@@ -57,7 +57,7 @@ where customer_id is null
 alter table public.orders drop constraint if exists orders_status_check;
 alter table public.orders
   add constraint orders_status_check
-  check (status in ('Menunggu Ongkir', 'Menunggu Pembayaran', 'Menunggu Konfirmasi', 'Pesanan Dikirim', 'Ditolak', 'menunggu_ongkir', 'menunggu_pembayaran', 'menunggu_konfirmasi', 'pesanan_dikirim', 'ditolak'));
+  check (status in ('Menunggu Ongkir', 'Menunggu Pembayaran', 'Menunggu Konfirmasi', 'Proses', 'Pesanan Dikirim', 'Ditolak', 'menunggu_ongkir', 'menunggu_pembayaran', 'menunggu_konfirmasi', 'proses', 'pesanan_dikirim', 'ditolak'));
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
