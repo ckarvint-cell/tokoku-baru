@@ -696,6 +696,7 @@ export default function OrdersPage() {
             const grandTotal = orderGrandTotal(order);
             const resi = trackingNumber(order);
             const logo = courierLogo(order);
+            const canUploadProof = status === "menunggu_pembayaran" || status === "menunggu_konfirmasi";
 
             return (
               <article key={order.id} className="rounded-lg border border-rose-100 bg-white shadow-sm">
@@ -761,6 +762,21 @@ export default function OrdersPage() {
                         Belum ada bukti
                       </div>
                     )}
+                    {canUploadProof && (
+                      <label className="mt-3 grid gap-2 text-xs font-bold text-emerald-950">
+                        {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingId === order.id}
+                          onChange={async (event) => {
+                            await uploadPaymentProof(order, event.target.files?.[0]);
+                            event.currentTarget.value = "";
+                          }}
+                          className="w-full rounded-md border border-emerald-200 bg-white px-2 py-2 text-xs file:mr-2 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-rose-700"
+                        />
+                      </label>
+                    )}
                   </div>
 
                   <div className="rounded-lg border border-slate-200 p-3 text-sm leading-5 text-slate-600">
@@ -794,21 +810,6 @@ export default function OrdersPage() {
                             <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
                           </div>
                         </div>
-                        {status === "menunggu_pembayaran" && (
-                          <label className="mt-3 grid gap-2 text-sm font-bold text-slate-950">
-                            {proof ? "Ganti Bukti Pembayaran" : "Upload Bukti Pembayaran"}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              disabled={uploadingId === order.id}
-                              onChange={async (event) => {
-                                await uploadPaymentProof(order, event.target.files?.[0]);
-                                event.currentTarget.value = "";
-                              }}
-                              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-700"
-                            />
-                          </label>
-                        )}
                       </>
                     )}
                   </div>
