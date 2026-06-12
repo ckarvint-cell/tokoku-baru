@@ -91,6 +91,13 @@ type CourierSetting = {
   name: string;
 };
 
+type FooterSettings = {
+  store_name: string;
+  address: string;
+  whatsapp: string;
+  email: string;
+};
+
 type StoredPaymentProof = {
   name: string;
   created_at?: string | null;
@@ -98,6 +105,12 @@ type StoredPaymentProof = {
 };
 
 const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "menunggu_konfirmasi", "diproses", "pesanan_dikirim", "ditolak"];
+const defaultFooterSettings: FooterSettings = {
+  store_name: "Tokoku",
+  address: "",
+  whatsapp: "",
+  email: "",
+};
 
 function asNumber(value: unknown) {
   const number = Number(value || 0);
@@ -348,6 +361,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [couriers, setCouriers] = useState<CourierSetting[]>([]);
+  const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [filter, setFilter] = useState<FilterStatus>("semua");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
@@ -373,7 +387,7 @@ export default function AdminOrdersPage() {
       }
 
       setProfile(profileData as Profile);
-      await Promise.all([loadOrders(), loadCouriers()]);
+      await Promise.all([loadOrders(), loadCouriers(), loadFooterSettings()]);
       setLoading(false);
     }
 
@@ -393,6 +407,11 @@ export default function AdminOrdersPage() {
   async function loadCouriers() {
     const { data } = await supabase.from("courier_settings").select("id,name").order("name", { ascending: true });
     if (data) setCouriers(data as CourierSetting[]);
+  }
+
+  async function loadFooterSettings() {
+    const { data } = await supabase.from("footer_settings").select("store_name,address,whatsapp,email").eq("id", true).maybeSingle();
+    if (data) setFooterSettings({ ...defaultFooterSettings, ...data });
   }
 
   function updateDraft(orderId: string, key: keyof Draft, value: string) {
@@ -595,6 +614,17 @@ export default function AdminOrdersPage() {
   function printShippingLabel(order: Order) {
     const resi = trackingNumber(order);
     const courier = courierName(order);
+    const storeName = footerSettings.store_name || defaultFooterSettings.store_name;
+    const storeAddress = footerSettings.address || "";
+    const productRows = (order.order_items || [])
+      .map((item) => `<div class="product-row"><span>${escapeHtml(itemName(item))}</span><strong>x ${itemQty(item)}</strong></div>`)
+      .join("");
+    const barcodeBars = Array.from(resi || "0")
+      .map((char, index) => {
+        const width = ((char.charCodeAt(0) + index) % 4) + 1;
+        return `<span style="width:${width}px"></span>`;
+      })
+      .join("");
 
     if (!resi) {
       setMessage("Nomor resi belum ada, label belum bisa dicetak.");
@@ -611,12 +641,16 @@ export default function AdminOrdersPage() {
             * { box-sizing: border-box; }
             body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; }
             .label { width: 100mm; min-height: 150mm; padding: 10mm; border: 1px solid #cbd5e1; }
-            .title { font-size: 18px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
+            .title { font-size: 22px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+            .store-address { margin-top: 4px; font-size: 12px; line-height: 1.5; color: #475569; white-space: pre-wrap; }
+            .divider { border-top: 2px solid #0f172a; margin-top: 10px; }
             .section { margin-top: 12px; }
             .small { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
             .value { margin-top: 4px; font-size: 15px; font-weight: 800; line-height: 1.4; }
-            .address { font-size: 13px; font-weight: 600; line-height: 1.5; white-space: pre-wrap; }
+            .product-row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e2e8f0; padding: 7px 0; font-size: 13px; }
             .resi { margin-top: 8px; border: 2px solid #0f172a; padding: 10px; text-align: center; font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+            .barcode { margin-top: 10px; display: flex; align-items: stretch; justify-content: center; gap: 2px; height: 58px; border: 1px solid #cbd5e1; padding: 8px; }
+            .barcode span { display: block; background: #0f172a; height: 100%; }
             @media print {
               body { margin: 0; }
               .label { border: 0; width: auto; min-height: auto; }
@@ -625,25 +659,22 @@ export default function AdminOrdersPage() {
         </head>
         <body>
           <main class="label">
-            <div class="title">Label Pengiriman</div>
+            <div class="title">${escapeHtml(storeName)}</div>
+            ${storeAddress ? `<div class="store-address">${escapeHtml(storeAddress)}</div>` : ""}
+            <div class="divider"></div>
             <div class="section">
-              <div class="small">Kurir</div>
-              <div class="value">${escapeHtml(courier || "-")}</div>
+              <div class="small">Detail Produk</div>
+              ${productRows || `<div class="product-row"><span>Produk</span><strong>x 0</strong></div>`}
             </div>
             <div class="section">
               <div class="small">Nomor Resi</div>
               <div class="resi">${escapeHtml(resi)}</div>
+              <div class="barcode">${barcodeBars}</div>
             </div>
             <div class="section">
-              <div class="small">Penerima</div>
-              <div class="value">${escapeHtml(orderName(order) || "-")}</div>
-              <div class="address">${escapeHtml(orderPhone(order) || "-")}</div>
+              <div class="small">Nama Kurir</div>
+              <div class="value">${escapeHtml(courier || "-")}</div>
             </div>
-            <div class="section">
-              <div class="small">Alamat</div>
-              <div class="address">${escapeHtml(orderAddress(order) || "-")}</div>
-            </div>
-            ${orderMaps(order) ? `<div class="section"><div class="small">Google Maps</div><div class="address">${escapeHtml(orderMaps(order))}</div></div>` : ""}
           </main>
         </body>
       </html>
@@ -659,6 +690,75 @@ export default function AdminOrdersPage() {
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 400);
+  }
+
+  function printAdminInvoice(order: Order) {
+    const totalProduk = orderTotalProduk(order);
+    const ongkir = orderOngkir(order);
+    const grandTotal = orderGrandTotal(order);
+    const storeName = footerSettings.store_name || defaultFooterSettings.store_name;
+    const productRows = (order.order_items || [])
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(itemName(item))}</td>
+            <td>${itemQty(item)}</td>
+            <td>${formatCurrency(itemSubtotal(item))}</td>
+          </tr>
+        `,
+      )
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice ${escapeHtml(order.id.slice(0, 8))}</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; }
+            main { width: 210mm; min-height: 297mm; padding: 18mm; }
+            h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; }
+            .muted { color: #64748b; font-size: 12px; line-height: 1.6; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 13px; }
+            th { background: #f8fafc; }
+            .summary { margin-left: auto; width: 45%; }
+            .summary td:last-child { text-align: right; font-weight: 800; }
+            @media print { main { width: auto; min-height: auto; } }
+          </style>
+        </head>
+        <body>
+          <main>
+            <h1>${escapeHtml(storeName)}</h1>
+            ${footerSettings.address ? `<div class="muted">${escapeHtml(footerSettings.address)}</div>` : ""}
+            <div class="muted">Invoice: #${escapeHtml(order.id.slice(0, 8))}</div>
+            <div class="muted">Status: ${escapeHtml(statusLabel(normalizeStatus(order)))}</div>
+            <table>
+              <thead><tr><th>Produk</th><th>Qty</th><th>Subtotal</th></tr></thead>
+              <tbody>${productRows}</tbody>
+            </table>
+            <table class="summary">
+              <tbody>
+                <tr><td>Total Produk</td><td>${formatCurrency(totalProduk)}</td></tr>
+                <tr><td>Ongkir</td><td>${formatCurrency(ongkir)}</td></tr>
+                <tr><td>Grand Total</td><td>${formatCurrency(grandTotal)}</td></tr>
+              </tbody>
+            </table>
+          </main>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      setMessage("Popup print diblokir browser. Izinkan popup untuk melihat invoice.");
+      return;
+    }
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
   }
 
   async function deleteOrder(order: Order) {
@@ -806,9 +906,27 @@ export default function AdminOrdersPage() {
                     <h2 className="mt-1 text-xl font-bold">Pesanan #{order.id.slice(0, 8)}</h2>
                     <p className="mt-1 text-sm text-slate-500">{orderName(order) || "-"} - {orderPhone(order) || "-"}</p>
                   </div>
-                  <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
-                    {statusLabel(status)}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
+                      {statusLabel(status)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => printAdminInvoice(order)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                    >
+                      Lihat Invoice
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canPrintLabel}
+                      onClick={() => printShippingLabel(order)}
+                      title={!canPrintLabel ? "Nomor resi belum ada." : undefined}
+                      className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                      Cetak Label
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 p-5 xl:grid-cols-3">
@@ -898,7 +1016,7 @@ export default function AdminOrdersPage() {
                           </select>
                         </label>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <button
                           disabled={savingId === order.id}
                           onClick={() => saveShipping(order)}
@@ -913,15 +1031,6 @@ export default function AdminOrdersPage() {
                           className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
                           Kirim Resi
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!canPrintLabel}
-                          onClick={() => printShippingLabel(order)}
-                          title={!canPrintLabel ? "Nomor resi belum ada." : undefined}
-                          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
-                        >
-                          Cetak Label
                         </button>
                       </div>
                       {needsAcceptedFirst && (
