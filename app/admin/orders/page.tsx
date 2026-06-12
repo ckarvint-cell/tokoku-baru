@@ -84,6 +84,12 @@ type Draft = {
   trackingUrl: string;
 };
 
+type StoredPaymentProof = {
+  name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "menunggu_konfirmasi", "proses", "pesanan_dikirim", "ditolak"];
 
 function asNumber(value: unknown) {
@@ -219,6 +225,47 @@ function orderProof(order: Order) {
   return typeof storageProof === "string" ? storageProof : "";
 }
 
+function orderCustomerId(order: Order) {
+  return firstText(order["customer_id"], order["user_id"]);
+}
+
+function paymentProofUrlFromPath(path: string) {
+  return supabase.storage.from("payment-proofs").getPublicUrl(path).data.publicUrl;
+}
+
+async function findStoredPaymentProof(order: Order) {
+  if (orderProof(order)) return "";
+
+  const customerId = orderCustomerId(order);
+  if (!customerId) return "";
+
+  const { data, error } = await supabase.storage.from("payment-proofs").list(customerId, {
+    limit: 100,
+    sortBy: { column: "created_at", order: "desc" },
+  });
+
+  if (error || !data) return "";
+
+  const newestFile = (data as StoredPaymentProof[])
+    .filter((file) => file.name.startsWith(`${order.id}-`))
+    .sort((left, right) => {
+      const leftTime = new Date(left.created_at || left.updated_at || 0).getTime();
+      const rightTime = new Date(right.created_at || right.updated_at || 0).getTime();
+      return rightTime - leftTime;
+    })[0];
+
+  return newestFile ? paymentProofUrlFromPath(`${customerId}/${newestFile.name}`) : "";
+}
+
+async function hydrateAdminOrdersWithStoredProofs(rawOrders: Order[]) {
+  return Promise.all(
+    rawOrders.map(async (order) => {
+      const storedProof = await findStoredPaymentProof(order);
+      return storedProof ? { ...order, payment_proof_url: storedProof, bukti_pembayaran: storedProof } : order;
+    }),
+  );
+}
+
 function trackingNumber(order: Order) {
   return firstText(order.tracking_number, order.nomor_resi);
 }
@@ -294,7 +341,7 @@ export default function AdminOrdersPage() {
     const { data } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
 
     if (data) {
-      const nextOrders = data as Order[];
+      const nextOrders = await hydrateAdminOrdersWithStoredProofs(data as Order[]);
       setOrders(nextOrders);
       setDrafts(Object.fromEntries(nextOrders.map((order) => [order.id, makeDraft(order)])));
     }
