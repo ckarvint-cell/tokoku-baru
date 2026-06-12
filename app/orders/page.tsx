@@ -325,6 +325,7 @@ export default function OrdersPage() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [uploadingId, setUploadingId] = useState("");
+  const [copiedKey, setCopiedKey] = useState("");
 
   async function removeOldPaymentProofs(orderId: string, keepPath: string, previousProof: string) {
     const storedPaths = await listStoredPaymentProofs(userId, orderId);
@@ -500,9 +501,22 @@ export default function OrdersPage() {
     setUploadingId("");
   }
 
-  function copyTrackingNumber(resi: string) {
-    navigator.clipboard.writeText(resi);
-    setMessage("Nomor resi berhasil dicopy.");
+  async function copyText(value: string, key: string) {
+    if (!value) return;
+
+    await navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    window.setTimeout(() => {
+      setCopiedKey((current) => (current === key ? "" : current));
+    }, 1600);
+  }
+
+  function copyTrackingNumber(resi: string, orderId: string) {
+    copyText(resi, `resi-${orderId}`);
+  }
+
+  function copyAccountNumber(orderId: string) {
+    copyText(paymentSettings.account_number, `rekening-${orderId}`);
   }
 
   function printInvoice(order: Order) {
@@ -808,7 +822,20 @@ export default function OrdersPage() {
                           )}
                           <div className="text-sm leading-5">
                             <h3 className="font-bold text-slate-950">{paymentSettings.bank_name || "Rekening belum diatur"}</h3>
-                            <p>No. Rekening: <strong>{paymentSettings.account_number || "-"}</strong></p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>No. Rekening:</span>
+                              <strong>{paymentSettings.account_number || "-"}</strong>
+                              {paymentSettings.account_number && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyAccountNumber(order.id)}
+                                  className="rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[11px] font-bold text-sky-700"
+                                  aria-label="Copy nomor rekening"
+                                >
+                                  {copiedKey === `rekening-${order.id}` ? <span className="text-emerald-600">✓</span> : "Copy"}
+                                </button>
+                              )}
+                            </div>
                             <p>Atas Nama: <strong>{paymentSettings.account_holder || "-"}</strong></p>
                           </div>
                         </div>
@@ -820,10 +847,18 @@ export default function OrdersPage() {
                     <h3 className="mb-1 font-bold text-slate-950">Nomor Resi</h3>
                     {resi ? (
                       <div className="grid gap-2">
-                        <p>Nomor resi: <strong className="text-slate-950">{resi}</strong></p>
-                        <button onClick={() => copyTrackingNumber(resi)} className="w-fit rounded-md border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700">
-                          Copy Resi
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>Nomor resi:</span>
+                          <strong className="text-slate-950">{resi}</strong>
+                          <button
+                            type="button"
+                            onClick={() => copyTrackingNumber(resi, order.id)}
+                            className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px] font-bold text-slate-700"
+                            aria-label="Copy nomor resi"
+                          >
+                            {copiedKey === `resi-${order.id}` ? <span className="text-emerald-600">✓</span> : "Copy"}
+                          </button>
+                        </div>
                         <p className="font-bold text-slate-950">{courierName(order) || "-"}</p>
                       </div>
                     ) : (
@@ -856,8 +891,8 @@ export default function OrdersPage() {
                         )}
                         <div className="mt-4 flex flex-wrap gap-2">
                           {resi && (
-                            <button onClick={() => copyTrackingNumber(resi)} className="rounded-md bg-white px-4 py-2 text-sm font-bold text-emerald-700">
-                              Copy Resi
+                            <button onClick={() => copyTrackingNumber(resi, `${order.id}-shipping`)} className="rounded-md bg-white px-3 py-2 text-xs font-bold text-emerald-700">
+                              {copiedKey === `resi-${order.id}-shipping` ? <span className="text-emerald-600">✓</span> : "Copy Resi"}
                             </button>
                           )}
                           {trackingUrl(order) && (
