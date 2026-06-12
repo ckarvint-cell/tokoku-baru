@@ -64,6 +64,8 @@ type Order = Row & {
   nomor_resi?: string | null;
   courier_name?: string | null;
   nama_kurir?: string | null;
+  kurir?: string | null;
+  shipping_courier?: string | null;
   courier_logo_url?: string | null;
   logo_kurir?: string | null;
   tracking_url?: string | null;
@@ -276,7 +278,7 @@ function trackingNumber(order: Order) {
 }
 
 function courierName(order: Order) {
-  return firstText(order.courier_name, order.nama_kurir);
+  return firstText(order.courier_name, order.nama_kurir, order.kurir, order.shipping_courier);
 }
 
 function courierLogo(order: Order) {
@@ -509,6 +511,8 @@ export default function AdminOrdersPage() {
         nomor_resi: tracking,
         courier_name: selectedCourier,
         nama_kurir: selectedCourier,
+        kurir: selectedCourier,
+        shipping_courier: selectedCourier,
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
