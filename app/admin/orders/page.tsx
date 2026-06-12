@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "proses" | "pesanan_dikirim" | "ditolak";
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "diproses" | "pesanan_dikirim" | "ditolak";
 type FilterStatus = Status | "semua";
 
 type Profile = {
@@ -95,7 +95,7 @@ type StoredPaymentProof = {
   updated_at?: string | null;
 };
 
-const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "menunggu_konfirmasi", "proses", "pesanan_dikirim", "ditolak"];
+const statuses: FilterStatus[] = ["semua", "menunggu_ongkir", "menunggu_pembayaran", "menunggu_konfirmasi", "diproses", "pesanan_dikirim", "ditolak"];
 
 function asNumber(value: unknown) {
   const number = Number(value || 0);
@@ -123,7 +123,7 @@ function parseNumberInput(value: string | undefined) {
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
   if (raw.includes("tolak")) return "ditolak";
-  if (raw.includes("proses")) return "proses";
+  if (raw.includes("proses") || raw.includes("diproses")) return "diproses";
   if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
   if (orderOngkir(order) <= 0) return "menunggu_ongkir";
   if (raw.includes("konfirmasi") || orderProof(order)) return "menunggu_konfirmasi";
@@ -135,7 +135,7 @@ function statusLabel(status: FilterStatus) {
   if (status === "menunggu_ongkir") return "Menunggu Ongkir";
   if (status === "menunggu_pembayaran") return "Menunggu Pembayaran";
   if (status === "menunggu_konfirmasi") return "Menunggu Konfirmasi";
-  if (status === "proses") return "Proses";
+  if (status === "diproses") return "Diproses";
   if (status === "pesanan_dikirim") return "Sedang Dikirim";
   return "Ditolak";
 }
@@ -144,7 +144,7 @@ function statusClass(status: Status) {
   if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
   if (status === "menunggu_konfirmasi") return "bg-violet-50 text-violet-700 border-violet-200";
-  if (status === "proses") return "bg-indigo-50 text-indigo-700 border-indigo-200";
+  if (status === "diproses") return "bg-indigo-50 text-indigo-700 border-indigo-200";
   if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
@@ -389,9 +389,9 @@ export default function AdminOrdersPage() {
 
     if (
       isStatusConstraintError(error?.message) &&
-      (adaptivePayload.status === "proses" || adaptivePayload.status_pesanan === "proses")
+      (adaptivePayload.status === "diproses" || adaptivePayload.status_pesanan === "diproses")
     ) {
-      setMessage("Status Proses belum diizinkan di database. Jalankan SQL order-workflow terbaru di Supabase terlebih dahulu.");
+      setMessage("Status Diproses belum diizinkan di database. Jalankan SQL order-workflow terbaru di Supabase terlebih dahulu.");
       setSavingId("");
       return false;
     }
@@ -470,12 +470,12 @@ export default function AdminOrdersPage() {
     return updateOrder(
       order.id,
       {
-        status: "proses",
-        status_pesanan: "proses",
+        status: "diproses",
+        status_pesanan: "diproses",
         paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      "Pesanan berhasil diterima dan masuk status Proses.",
+      "Pesanan berhasil diterima dan masuk status Diproses.",
     );
   }
 
@@ -485,8 +485,8 @@ export default function AdminOrdersPage() {
     const tracking = draft?.trackingNumber?.trim() || "";
     const selectedCourier = draft?.courierName?.trim() || "";
 
-    if (status !== "proses") {
-      setMessage("Resi hanya bisa dikirim setelah pesanan berstatus Proses.");
+    if (status !== "diproses") {
+      setMessage("Resi hanya bisa dikirim setelah pesanan berstatus Diproses.");
       return;
     }
 
@@ -512,7 +512,7 @@ export default function AdminOrdersPage() {
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      "Resi berhasil dikirim.",
+      "Resi berhasil ditulis/input.",
     );
   }
 
@@ -547,7 +547,7 @@ export default function AdminOrdersPage() {
       menungguOngkir: orders.filter((order) => normalizeStatus(order) === "menunggu_ongkir").length,
       menungguPembayaran: orders.filter((order) => normalizeStatus(order) === "menunggu_pembayaran").length,
       menungguKonfirmasi: orders.filter((order) => normalizeStatus(order) === "menunggu_konfirmasi").length,
-      proses: orders.filter((order) => normalizeStatus(order) === "proses").length,
+      proses: orders.filter((order) => normalizeStatus(order) === "diproses").length,
       sedangDikirim: orders.filter((order) => normalizeStatus(order) === "pesanan_dikirim").length,
       ditolak: orders.filter((order) => normalizeStatus(order) === "ditolak").length,
     }),
@@ -606,7 +606,7 @@ export default function AdminOrdersPage() {
             <p className="mt-2 text-3xl font-bold">{counts.menungguKonfirmasi}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Proses</p>
+            <p className="text-sm font-medium text-slate-500">Diproses</p>
             <p className="mt-2 text-3xl font-bold">{counts.proses}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -645,7 +645,8 @@ export default function AdminOrdersPage() {
             const courierOptions = draft.courierName && !couriers.some((courier) => courier.name === draft.courierName)
               ? [...couriers, { id: "current", name: draft.courierName }]
               : couriers;
-            const canSendTracking = status === "proses" && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
+            const needsAcceptedFirst = status !== "diproses";
+            const canSendTracking = status === "diproses" && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
 
             return (
               <article key={order.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -760,11 +761,15 @@ export default function AdminOrdersPage() {
                         <button
                           disabled={savingId === order.id || !canSendTracking}
                           onClick={() => saveTracking(order)}
+                          title={needsAcceptedFirst ? "Anda harus terima pesanan dulu." : undefined}
                           className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
                           Kirim Resi
                         </button>
                       </div>
+                      {needsAcceptedFirst && (
+                        <p className="text-xs font-semibold text-amber-700">Anda harus terima pesanan dulu sebelum input resi.</p>
+                      )}
                     </div>
                   </div>
 
@@ -815,7 +820,7 @@ export default function AdminOrdersPage() {
               <p className="mt-4 text-xs font-bold uppercase tracking-[0.25em] text-emerald-600">Terima Pesanan</p>
               <h2 className="mt-2 text-xl font-bold">Yakin menerima pesanan #{approvingOrder.id.slice(0, 8)}?</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Pastikan bukti transfer customer sudah benar. Jika diterima, status pesanan berubah menjadi Proses dan kolom resi bisa digunakan.
+                Pastikan bukti transfer customer sudah benar. Jika diterima, status pesanan berubah menjadi Diproses dan kolom resi bisa digunakan.
               </p>
               <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
                 Total pembayaran: <strong>{formatCurrency(orderGrandTotal(approvingOrder))}</strong>

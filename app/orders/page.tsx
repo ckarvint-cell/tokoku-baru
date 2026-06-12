@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "proses" | "pesanan_dikirim" | "ditolak";
+type Status = "menunggu_ongkir" | "menunggu_pembayaran" | "menunggu_konfirmasi" | "diproses" | "pesanan_dikirim" | "ditolak";
 type Row = Record<string, unknown>;
 
 type OrderItem = Row & {
@@ -132,7 +132,7 @@ function escapeHtml(value: unknown) {
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
   if (raw.includes("tolak")) return "ditolak";
-  if (raw.includes("proses")) return "proses";
+  if (raw.includes("proses") || raw.includes("diproses")) return "diproses";
   if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
   if (orderOngkir(order) <= 0) return "menunggu_ongkir";
   if (raw.includes("konfirmasi") || orderProof(order)) return "menunggu_konfirmasi";
@@ -143,7 +143,7 @@ function statusLabel(status: Status) {
   if (status === "menunggu_ongkir") return "menunggu ongkir";
   if (status === "menunggu_pembayaran") return "menunggu pembayaran";
   if (status === "menunggu_konfirmasi") return "menunggu konfirmasi";
-  if (status === "proses") return "proses";
+  if (status === "diproses") return "diproses";
   if (status === "pesanan_dikirim") return "sedang dikirim";
   return "ditolak";
 }
@@ -152,7 +152,7 @@ function statusClass(status: Status) {
   if (status === "menunggu_ongkir") return "bg-amber-50 text-amber-700 border-amber-200";
   if (status === "menunggu_pembayaran") return "bg-sky-50 text-sky-700 border-sky-200";
   if (status === "menunggu_konfirmasi") return "bg-violet-50 text-violet-700 border-violet-200";
-  if (status === "proses") return "bg-indigo-50 text-indigo-700 border-indigo-200";
+  if (status === "diproses") return "bg-indigo-50 text-indigo-700 border-indigo-200";
   if (status === "pesanan_dikirim") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
