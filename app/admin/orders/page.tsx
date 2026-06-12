@@ -98,6 +98,13 @@ type FooterSettings = {
   email: string;
 };
 
+type PaymentSettings = {
+  bank_name: string;
+  account_number: string;
+  account_holder: string;
+  payment_logo_url: string;
+};
+
 type StoredPaymentProof = {
   name: string;
   created_at?: string | null;
@@ -110,6 +117,12 @@ const defaultFooterSettings: FooterSettings = {
   address: "",
   whatsapp: "",
   email: "",
+};
+const defaultPaymentSettings: PaymentSettings = {
+  bank_name: "",
+  account_number: "",
+  account_holder: "",
+  payment_logo_url: "",
 };
 
 function asNumber(value: unknown) {
@@ -362,6 +375,7 @@ export default function AdminOrdersPage() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [couriers, setCouriers] = useState<CourierSetting[]>([]);
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
   const [filter, setFilter] = useState<FilterStatus>("semua");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
@@ -387,7 +401,7 @@ export default function AdminOrdersPage() {
       }
 
       setProfile(profileData as Profile);
-      await Promise.all([loadOrders(), loadCouriers(), loadFooterSettings()]);
+      await Promise.all([loadOrders(), loadCouriers(), loadFooterSettings(), loadPaymentSettings()]);
       setLoading(false);
     }
 
@@ -412,6 +426,11 @@ export default function AdminOrdersPage() {
   async function loadFooterSettings() {
     const { data } = await supabase.from("footer_settings").select("store_name,address,whatsapp,email").eq("id", true).maybeSingle();
     if (data) setFooterSettings({ ...defaultFooterSettings, ...data });
+  }
+
+  async function loadPaymentSettings() {
+    const { data } = await supabase.from("payment_settings").select("bank_name,account_number,account_holder,payment_logo_url").eq("id", true).maybeSingle();
+    if (data) setPaymentSettings({ ...defaultPaymentSettings, ...data });
   }
 
   function updateDraft(orderId: string, key: keyof Draft, value: string) {
@@ -648,6 +667,7 @@ export default function AdminOrdersPage() {
             .small { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
             .value { margin-top: 4px; font-size: 15px; font-weight: 800; line-height: 1.4; }
             .product-row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e2e8f0; padding: 7px 0; font-size: 13px; }
+            .person-box { border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
             .resi { margin-top: 8px; border: 2px solid #0f172a; padding: 10px; text-align: center; font-size: 22px; font-weight: 900; letter-spacing: 1px; }
             .barcode { margin-top: 10px; display: flex; align-items: stretch; justify-content: center; gap: 2px; height: 58px; border: 1px solid #cbd5e1; padding: 8px; }
             .barcode span { display: block; background: #0f172a; height: 100%; }
@@ -665,6 +685,23 @@ export default function AdminOrdersPage() {
             <div class="section">
               <div class="small">Detail Produk</div>
               ${productRows || `<div class="product-row"><span>Produk</span><strong>x 0</strong></div>`}
+            </div>
+            <div class="section">
+              <div class="small">Pengirim</div>
+              <div class="person-box">
+                <strong>${escapeHtml(storeName)}</strong><br />
+                ${escapeHtml(storeAddress || "-")}<br />
+                WhatsApp: ${escapeHtml(footerSettings.whatsapp || "-")}
+              </div>
+            </div>
+            <div class="section">
+              <div class="small">Penerima</div>
+              <div class="person-box">
+                <strong>${escapeHtml(orderName(order) || "-")}</strong><br />
+                WhatsApp: ${escapeHtml(orderPhone(order) || "-")}<br />
+                ${escapeHtml(orderAddress(order) || "-")}<br />
+                ${orderMaps(order) ? `Maps: ${escapeHtml(orderMaps(order))}` : ""}
+              </div>
             </div>
             <div class="section">
               <div class="small">Nomor Resi</div>
@@ -693,20 +730,30 @@ export default function AdminOrdersPage() {
   }
 
   function printAdminInvoice(order: Order) {
+    const status = normalizeStatus(order);
+    const isPaid = status === "pesanan_dikirim";
+    const proof = orderProof(order);
     const totalProduk = orderTotalProduk(order);
     const ongkir = orderOngkir(order);
     const grandTotal = orderGrandTotal(order);
+    const resi = trackingNumber(order);
     const storeName = footerSettings.store_name || defaultFooterSettings.store_name;
+    const invoiceNumber = `INV-${order.id.slice(0, 8).toUpperCase()}`;
     const productRows = (order.order_items || [])
-      .map(
-        (item) => `
+      .map((item) => {
+        const note = itemNote(item);
+        return `
           <tr>
-            <td>${escapeHtml(itemName(item))}</td>
-            <td>${itemQty(item)}</td>
-            <td>${formatCurrency(itemSubtotal(item))}</td>
+            <td>
+              <strong>${escapeHtml(itemName(item))}</strong>
+              ${note ? `<div class="muted">Catatan: ${escapeHtml(note)}</div>` : ""}
+            </td>
+            <td class="center">${itemQty(item)}</td>
+            <td class="right">${formatCurrency(itemPrice(item))}</td>
+            <td class="right">${formatCurrency(itemSubtotal(item))}</td>
           </tr>
-        `,
-      )
+        `;
+      })
       .join("");
 
     const html = `
@@ -714,37 +761,106 @@ export default function AdminOrdersPage() {
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>Invoice ${escapeHtml(order.id.slice(0, 8))}</title>
+          <title>${escapeHtml(invoiceNumber)}</title>
           <style>
-            body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; }
-            main { width: 210mm; min-height: 297mm; padding: 18mm; }
-            h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; }
-            .muted { color: #64748b; font-size: 12px; line-height: 1.6; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 13px; }
-            th { background: #f8fafc; }
-            .summary { margin-left: auto; width: 45%; }
-            .summary td:last-child { text-align: right; font-weight: 800; }
-            @media print { main { width: auto; min-height: auto; } }
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, sans-serif; }
+            .invoice { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 24mm 18mm; overflow: hidden; }
+            .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0; }
+            .watermark span { transform: rotate(-18deg); font-size: 84px; font-weight: 900; letter-spacing: 8px; opacity: .3; color: ${isPaid ? "#16a34a" : "#dc2626"}; }
+            .content { position: relative; z-index: 1; }
+            .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f172a; padding-bottom: 18px; }
+            .brand { font-size: 28px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+            .meta { text-align: right; line-height: 1.6; }
+            .small { font-size: 12px; color: #475569; line-height: 1.6; }
+            .muted { margin-top: 4px; font-size: 12px; color: #64748b; }
+            h2 { margin: 24px 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: 2px; color: #f43f5e; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th { background: #fff1f2; color: #0f172a; text-align: left; font-size: 12px; padding: 10px; border: 1px solid #fecdd3; }
+            td { padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; font-size: 13px; }
+            .right { text-align: right; }
+            .center { text-align: center; }
+            .summary { margin-left: auto; width: 45%; margin-top: 12px; }
+            .summary td { border-color: #fecdd3; }
+            .summary .grand td { font-size: 16px; font-weight: 900; background: #fff1f2; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+            .box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; min-height: 110px; }
+            .proof { max-width: 220px; max-height: 160px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; }
+            .bank { display: flex; gap: 12px; align-items: flex-start; }
+            .bank img { width: 64px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; }
+            @media print {
+              body { background: white; }
+              .invoice { margin: 0; width: auto; min-height: auto; box-shadow: none; }
+            }
           </style>
         </head>
         <body>
-          <main>
-            <h1>${escapeHtml(storeName)}</h1>
-            ${footerSettings.address ? `<div class="muted">${escapeHtml(footerSettings.address)}</div>` : ""}
-            <div class="muted">Invoice: #${escapeHtml(order.id.slice(0, 8))}</div>
-            <div class="muted">Status: ${escapeHtml(statusLabel(normalizeStatus(order)))}</div>
+          <main class="invoice">
+            <div class="watermark"><span>${isPaid ? "LUNAS" : "BELUM LUNAS"}</span></div>
+            <div class="content">
+              <section class="header">
+                <div>
+                  <div class="brand">${escapeHtml(storeName)}</div>
+                  ${footerSettings.address ? `<div class="small">${escapeHtml(footerSettings.address)}</div>` : ""}
+                  ${footerSettings.whatsapp ? `<div class="small">WhatsApp: ${escapeHtml(footerSettings.whatsapp)}</div>` : ""}
+                  ${footerSettings.email ? `<div class="small">Email: ${escapeHtml(footerSettings.email)}</div>` : ""}
+                </div>
+                <div class="meta">
+                  <strong>${escapeHtml(invoiceNumber)}</strong><br />
+                  <span class="small">${new Date(order.created_at).toLocaleString("id-ID")}</span><br />
+                  <span class="small">Status: ${escapeHtml(statusLabel(status))}</span>
+                </div>
+              </section>
+
+            <h2>Detail Produk</h2>
             <table>
-              <thead><tr><th>Produk</th><th>Qty</th><th>Subtotal</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Produk</th>
+                  <th class="center">Qty</th>
+                  <th class="right">Harga</th>
+                  <th class="right">Subtotal</th>
+                </tr>
+              </thead>
               <tbody>${productRows}</tbody>
             </table>
             <table class="summary">
               <tbody>
-                <tr><td>Total Produk</td><td>${formatCurrency(totalProduk)}</td></tr>
-                <tr><td>Ongkir</td><td>${formatCurrency(ongkir)}</td></tr>
-                <tr><td>Grand Total</td><td>${formatCurrency(grandTotal)}</td></tr>
+                <tr><td>Total Produk</td><td class="right">${formatCurrency(totalProduk)}</td></tr>
+                <tr><td>Ongkir</td><td class="right">${formatCurrency(ongkir)}</td></tr>
+                <tr class="grand"><td>Total Harga</td><td class="right">${formatCurrency(grandTotal)}</td></tr>
               </tbody>
             </table>
+
+            <div class="grid">
+              <section class="box">
+                <h2>Bukti Pembayaran</h2>
+                ${proof ? `<img class="proof" src="${escapeHtml(proof)}" alt="Bukti pembayaran" />` : `<p class="small">Belum ada bukti pembayaran.</p>`}
+              </section>
+              <section class="box">
+                <h2>Penerima & Resi</h2>
+                <div class="small">Nama: ${escapeHtml(orderName(order) || "-")}</div>
+                <div class="small">WhatsApp: ${escapeHtml(orderPhone(order) || "-")}</div>
+                <div class="small">Alamat: ${escapeHtml(orderAddress(order) || "-")}</div>
+                ${orderMaps(order) ? `<div class="small">Maps: ${escapeHtml(orderMaps(order))}</div>` : ""}
+                <div class="small">Nomor Resi: ${escapeHtml(resi || "Nomor resi belum ada")}</div>
+                ${courierName(order) ? `<div class="small">Kurir: ${escapeHtml(courierName(order))}</div>` : ""}
+                ${trackingUrl(order) ? `<div class="small">Tracking: ${escapeHtml(trackingUrl(order))}</div>` : ""}
+              </section>
+            </div>
+
+            <section class="box" style="margin-top: 14px;">
+              <h2>Rekening Resmi</h2>
+              <div class="bank">
+                ${paymentSettings.payment_logo_url ? `<img src="${escapeHtml(paymentSettings.payment_logo_url)}" alt="${escapeHtml(paymentSettings.bank_name)}" />` : ""}
+                <div class="small">
+                  <strong>${escapeHtml(paymentSettings.bank_name || "Rekening belum diatur")}</strong><br />
+                  Nomor rekening: ${escapeHtml(paymentSettings.account_number || "-")}<br />
+                  Atas nama: ${escapeHtml(paymentSettings.account_holder || "-")}
+                </div>
+              </div>
+            </section>
+            </div>
           </main>
         </body>
       </html>
@@ -759,6 +875,7 @@ export default function AdminOrdersPage() {
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
   }
 
   async function deleteOrder(order: Order) {
