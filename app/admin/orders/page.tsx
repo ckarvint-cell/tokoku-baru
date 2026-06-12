@@ -123,8 +123,8 @@ function parseNumberInput(value: string | undefined) {
 function normalizeStatus(order: Order): Status {
   const raw = firstText(order.status, order.status_pesanan).toLowerCase().replaceAll(" ", "_");
   if (raw.includes("tolak")) return "ditolak";
+  if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order)) return "pesanan_dikirim";
   if (raw.includes("proses") || raw.includes("diproses")) return "diproses";
-  if (raw.includes("kirim") || raw.includes("dikirim") || trackingNumber(order) || order.paid_at) return "pesanan_dikirim";
   if (orderOngkir(order) <= 0) return "menunggu_ongkir";
   if (raw.includes("konfirmasi") || orderProof(order)) return "menunggu_konfirmasi";
   return "menunggu_pembayaran";
@@ -512,7 +512,7 @@ export default function AdminOrdersPage() {
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      "Resi berhasil ditulis/input.",
+      "Resi dan kurir berhasil ditulis/input. Status pesanan menjadi Sedang Dikirim.",
     );
   }
 
