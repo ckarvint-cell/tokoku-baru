@@ -510,7 +510,7 @@ export default function AdminOrdersPage() {
     const tracking = draft?.trackingNumber?.trim() || "";
     const selectedCourier = draft?.courierName?.trim() || "";
 
-    if (status !== "diproses") {
+    if (!["diproses", "pesanan_dikirim"].includes(status)) {
       setMessage("Resi hanya bisa dikirim setelah pesanan berstatus Diproses.");
       return;
     }
@@ -553,6 +553,14 @@ export default function AdminOrdersPage() {
 
       if (!error && !missingRequiredCourier) {
         await loadOrders();
+        setDrafts((current) => ({
+          ...current,
+          [order.id]: {
+            ...(current[order.id] || makeDraft(order)),
+            trackingNumber: tracking,
+            courierName: selectedCourier,
+          },
+        }));
         setMessage(`Resi dan nama kurir ${selectedCourier} berhasil disimpan. Status pesanan menjadi Sedang Dikirim.`);
         setSavingId("");
         return;
@@ -692,8 +700,8 @@ export default function AdminOrdersPage() {
             const courierOptions = draft.courierName && !couriers.some((courier) => courier.name === draft.courierName)
               ? [...couriers, { id: "current", name: draft.courierName }]
               : couriers;
-            const needsAcceptedFirst = status !== "diproses";
-            const canSendTracking = status === "diproses" && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
+            const needsAcceptedFirst = !["diproses", "pesanan_dikirim"].includes(status);
+            const canSendTracking = !needsAcceptedFirst && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
             const canVerifyOrder = status === "menunggu_konfirmasi";
 
             return (
