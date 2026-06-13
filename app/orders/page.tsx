@@ -757,9 +757,6 @@ export default function OrdersPage() {
                     <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
                       {statusLabel(status)}
                     </span>
-                    <span className="rounded-md border border-rose-100 bg-white px-3 py-2 text-xs font-bold text-slate-500">
-                      {isExpanded ? "Tutup Detail" : "Lihat Detail"}
-                    </span>
                     <button
                       type="button"
                       onClick={() => printInvoice(order)}

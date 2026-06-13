@@ -386,6 +386,7 @@ export default function AdminOrdersPage() {
   const [footerSettings, setFooterSettings] = useState<FooterSettings>(defaultFooterSettings);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(defaultPaymentSettings);
   const [filter, setFilter] = useState<FilterStatus>("semua");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
@@ -912,10 +913,19 @@ export default function AdminOrdersPage() {
     setSavingId("");
   }
 
-  const filteredOrders = useMemo(
-    () => (filter === "semua" ? orders : orders.filter((order) => normalizeStatus(order) === filter)),
-    [orders, filter],
-  );
+  const filteredOrders = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return orders.filter((order) => {
+      const matchesStatus = filter === "semua" || normalizeStatus(order) === filter;
+      const matchesSearch = !query
+        || order.id.toLowerCase().includes(query)
+        || order.id.slice(0, 8).toLowerCase().includes(query)
+        || orderName(order).toLowerCase().includes(query);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [orders, filter, searchQuery]);
 
   const counts = useMemo(
     () => ({
@@ -995,8 +1005,17 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="grid max-w-xs gap-2 text-sm font-bold">
+        <div className="mt-6 grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_280px]">
+          <label className="grid gap-2 text-sm font-bold">
+            Cari Pesanan
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Cari nomor invoice atau nama customer..."
+              className="rounded-md border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-400"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-bold">
             Filter Status
             <select
               value={filter}
@@ -1058,9 +1077,6 @@ export default function AdminOrdersPage() {
                   <div className="flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                     <span className={`w-fit rounded-full border px-3 py-1 text-xs font-bold ${statusClass(status)}`}>
                       {statusLabel(status)}
-                    </span>
-                    <span className="rounded-md border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500">
-                      {isExpanded ? "Tutup Detail" : "Lihat Detail"}
                     </span>
                     <button
                       type="button"
@@ -1232,7 +1248,7 @@ export default function AdminOrdersPage() {
 
         {filteredOrders.length === 0 && (
           <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">
-            Belum ada pesanan untuk filter ini.
+            Belum ada pesanan yang cocok dengan filter atau pencarian ini.
           </div>
         )}
 
