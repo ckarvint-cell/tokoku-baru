@@ -1029,9 +1029,9 @@ export default function Home() {
                   Daftar Pesanan
                 </Link>
               )}
-              {profile?.role === "admin" && (
+              {(profile?.role === "admin" || profile?.role === "manager") && (
                 <Link href="/admin" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">
-                  Admin
+                  {profile.role === "manager" ? "Manager" : "Admin"}
                 </Link>
               )}
               {!profile && (
