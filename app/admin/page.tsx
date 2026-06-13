@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [desktopPanelOpen, setDesktopPanelOpen] = useState(true);
 
   useEffect(() => {
     async function checkAccess() {
@@ -79,7 +80,7 @@ export default function AdminPage() {
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white p-5 shadow-xl transition-transform duration-200 lg:translate-x-0 lg:shadow-none ${panelOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white p-5 shadow-xl transition-transform duration-200 lg:shadow-none ${panelOpen ? "translate-x-0" : "-translate-x-full"} ${desktopPanelOpen ? "lg:translate-x-0" : "lg:-translate-x-full"}`}>
         <div className="flex items-center justify-between gap-3">
           <Link href="/" onClick={() => setPanelOpen(false)} className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-rose-500 hover:text-rose-600">
             Tokoku
@@ -105,7 +106,7 @@ export default function AdminPage() {
         </nav>
       </aside>
 
-      <section className="lg:pl-64">
+      <section className={`transition-[padding] duration-200 ${desktopPanelOpen ? "lg:pl-64" : "lg:pl-0"}`}>
         <header className="border-b border-slate-200 bg-white">
           <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-8">
             <div className="flex items-center gap-3">
@@ -114,6 +115,19 @@ export default function AdminPage() {
                 aria-label="Buka panel admin"
                 onClick={() => setPanelOpen(true)}
                 className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm lg:hidden"
+              >
+                <span className="grid gap-1">
+                  <span className="block h-0.5 w-4 rounded bg-slate-700" />
+                  <span className="block h-0.5 w-4 rounded bg-slate-700" />
+                  <span className="block h-0.5 w-4 rounded bg-slate-700" />
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label={desktopPanelOpen ? "Sembunyikan panel admin" : "Tampilkan panel admin"}
+                onClick={() => setDesktopPanelOpen((current) => !current)}
+                className="hidden h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm lg:flex"
+                title={desktopPanelOpen ? "Sembunyikan panel" : "Tampilkan panel"}
               >
                 <span className="grid gap-1">
                   <span className="block h-0.5 w-4 rounded bg-slate-700" />
@@ -159,11 +173,11 @@ export default function AdminPage() {
 
           <section className="mt-8">
             <h3 className="text-xl font-bold">Menu Pengelolaan</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid grid-cols-4 gap-2">
               {adminMenus.map((menu) => (
-                <Link key={menu.href} href={menu.href} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                  <h4 className="text-lg font-bold">{menu.title}</h4>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{menu.description}</p>
+                <Link key={menu.href} href={menu.href} className="rounded-md border border-slate-200 bg-white px-2 py-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:px-3 sm:py-3">
+                  <h4 className="truncate text-xs font-bold sm:text-sm lg:text-base">{menu.title}</h4>
+                  <p className="mt-1 hidden text-xs leading-5 text-slate-600 sm:line-clamp-2 sm:block">{menu.description}</p>
                 </Link>
               ))}
             </div>
