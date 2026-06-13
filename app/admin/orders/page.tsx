@@ -390,6 +390,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
+  const [successPopup, setSuccessPopup] = useState("");
   const [approvingOrder, setApprovingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
@@ -629,7 +630,7 @@ export default function AdminOrdersPage() {
             courierName: selectedCourier,
           },
         }));
-        setMessage(`Resi dan nama kurir ${selectedCourier} berhasil disimpan. Status pesanan menjadi Sedang Dikirim.`);
+        setSuccessPopup(`Resi dan nama kurir ${selectedCourier} berhasil disimpan. Status pesanan menjadi Sedang Dikirim.`);
         setSavingId("");
         return;
       }
@@ -976,6 +977,26 @@ export default function AdminOrdersPage() {
         {message && (
           <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {message}
+          </div>
+        )}
+
+        {successPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
+            <div className="w-full max-w-sm rounded-xl bg-white p-5 text-center shadow-2xl">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-xl font-black text-emerald-700">
+                OK
+              </div>
+              <p className="mt-4 text-xs font-bold uppercase tracking-[0.25em] text-emerald-600">Berhasil</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-950">Data berhasil disimpan</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{successPopup}</p>
+              <button
+                type="button"
+                onClick={() => setSuccessPopup("")}
+                className="mt-5 w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white"
+              >
+                OK
+              </button>
+            </div>
           </div>
         )}
 
