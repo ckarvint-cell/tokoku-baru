@@ -974,34 +974,34 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Pesanan Baru</p>
-            <p className="mt-2 text-3xl font-bold">{counts.total}</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Pesanan Baru</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.total}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Menunggu Ongkir</p>
-            <p className="mt-2 text-3xl font-bold">{counts.menungguOngkir}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Ongkir</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguOngkir}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Menunggu Pembayaran</p>
-            <p className="mt-2 text-3xl font-bold">{counts.menungguPembayaran}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Pembayaran</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguPembayaran}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Menunggu Konfirmasi</p>
-            <p className="mt-2 text-3xl font-bold">{counts.menungguKonfirmasi}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Konfirmasi</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguKonfirmasi}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Diproses</p>
-            <p className="mt-2 text-3xl font-bold">{counts.proses}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Diproses</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.proses}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Sedang Dikirim</p>
-            <p className="mt-2 text-3xl font-bold">{counts.sedangDikirim}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Sedang Dikirim</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.sedangDikirim}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Ditolak</p>
-            <p className="mt-2 text-3xl font-bold">{counts.ditolak}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold leading-tight text-slate-500">Ditolak</p>
+            <p className="mt-1 text-xl font-bold leading-none">{counts.ditolak}</p>
           </div>
         </div>
 
