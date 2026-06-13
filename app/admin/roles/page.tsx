@@ -327,21 +327,21 @@ export default function AdminRolesPage() {
             <p className="text-sm text-slate-500">Toggle kiri/kanan untuk menentukan menu yang terlihat di akun Manager.</p>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
             {managerActions.map((action) => {
               const enabled = managerPermissions[action.key] ?? false;
 
               return (
-                <div key={action.key} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-bold text-slate-800">{action.label}</span>
+                <div key={action.key} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-2">
+                  <span className="truncate text-xs font-bold text-slate-800">{action.label}</span>
                   <button
                     type="button"
                     disabled={savingPermission === action.key}
                     onClick={() => updateManagerPermission(action.key, !enabled)}
-                    className={`relative h-7 w-14 rounded-full transition disabled:opacity-60 ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-60 ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
                     aria-label={`${enabled ? "Nonaktifkan" : "Aktifkan"} akses manager untuk ${action.label}`}
                   >
-                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${enabled ? "left-8" : "left-1"}`} />
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${enabled ? "left-6" : "left-1"}`} />
                   </button>
                 </div>
               );

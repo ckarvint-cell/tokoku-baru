@@ -47,6 +47,10 @@ type Toast = {
   message: string;
 };
 
+type AdminProfile = {
+  role: "admin" | "manager" | "customer" | string;
+};
+
 const PRODUCT_BUCKET = "product-images";
 
 function getDiscountedPrice(price: number, discountPercent: number | null) {
@@ -160,6 +164,7 @@ export default function AdminProductsPage() {
   const [openSortMenu, setOpenSortMenu] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
   const [toast, setToast] = useState<Toast | null>(null);
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [form, setForm] = useState({
     namaProduk: "",
     kategori: "",
@@ -180,16 +185,18 @@ export default function AdminProductsPage() {
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .single();
 
-      if (profile?.role !== "admin") {
+      if (!profileData || !["admin", "manager"].includes(profileData.role)) {
         router.push("/admin");
         return;
       }
+
+      setProfile(profileData as AdminProfile);
 
       await loadProducts();
       await loadCategories();
@@ -247,6 +254,8 @@ export default function AdminProductsPage() {
     setToast({ type, message: toastMessage });
     window.setTimeout(() => setToast(null), 2800);
   }
+
+  const isManager = profile?.role === "manager";
 
   const visibleProducts = useMemo(() => {
     const filteredProducts = products.filter((product) => {
@@ -482,6 +491,14 @@ export default function AdminProductsPage() {
 
   async function confirmDeleteProduct() {
     if (!pendingDeleteProduct) return;
+
+    if (profile?.role !== "admin") {
+      setPendingDeleteProduct(null);
+      setSuccess(false);
+      setMessage("Hapus produk hanya tersedia untuk admin.");
+      showToast("error", "Hapus produk hanya tersedia untuk admin.");
+      return;
+    }
 
     const { error } = await supabase.from("products").delete().eq("id", pendingDeleteProduct.id);
     if (error) {
@@ -804,7 +821,13 @@ export default function AdminProductsPage() {
                         <button type="button" onClick={() => startEdit(product)} className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-white">
                           Edit
                         </button>
-                        <button type="button" onClick={() => setPendingDeleteProduct(product)} className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white">
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteProduct(product)}
+                          disabled={isManager}
+                          title={isManager ? "Hapus produk hanya tersedia untuk admin." : undefined}
+                          className="rounded-md bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
                           Hapus
                         </button>
                       </div>
