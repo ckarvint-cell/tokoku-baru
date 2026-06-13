@@ -894,6 +894,11 @@ export default function AdminOrdersPage() {
   }
 
   async function deleteOrder(order: Order) {
+    if (profile?.role !== "admin") {
+      setMessage("Hanya admin yang dapat menghapus pesanan.");
+      return;
+    }
+
     if (!window.confirm("Yakin ingin menghapus pesanan ini?")) return;
 
     setSavingId(order.id);
@@ -1045,6 +1050,7 @@ export default function AdminOrdersPage() {
             const canSendTracking = !needsAcceptedFirst && Boolean(draft.trackingNumber.trim()) && Boolean(draft.courierName.trim());
             const canPrintLabel = Boolean(currentResi);
             const canVerifyOrder = status === "menunggu_konfirmasi";
+            const isManager = profile?.role === "manager";
             const isExpanded = expandedOrders[order.id] ?? false;
             const totalQty = orderTotalQty(order);
             const firstProductName = orderFirstProductName(order);
@@ -1231,12 +1237,16 @@ export default function AdminOrdersPage() {
                         <p className="text-xs font-semibold text-slate-500">Verifikasi sudah selesai untuk pesanan ini.</p>
                       )}
                       <button
-                        disabled={savingId === order.id}
+                        disabled={savingId === order.id || isManager}
                         onClick={() => deleteOrder(order)}
-                        className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
+                        title={isManager ? "Hanya admin yang dapat menghapus pesanan." : undefined}
+                        className="rounded-md border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Hapus Pesanan
                       </button>
+                      {isManager && (
+                        <p className="text-xs font-semibold text-slate-500">Hapus pesanan hanya tersedia untuk admin.</p>
+                      )}
                     </div>
                   </div>
                 </div>
