@@ -7,6 +7,12 @@ import { supabase } from "@/lib/supabase/client";
 
 type Role = "admin" | "manager" | "customer";
 type RoleFilter = Role | "semua";
+type ManagerMenuKey = "dashboard" | "products" | "customers" | "orders" | "vouchers" | "finance" | "custom" | "settings" | "roles";
+
+type RolePermission = {
+  menu_key: ManagerMenuKey;
+  enabled: boolean;
+};
 
 type Profile = {
   id: string;
@@ -22,6 +28,45 @@ const roles: { value: Role; label: string }[] = [
   { value: "manager", label: "Manager" },
   { value: "customer", label: "Customer" },
 ];
+
+const managerActions: { key: ManagerMenuKey; label: string }[] = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "products", label: "Produk" },
+  { key: "customers", label: "Customer" },
+  { key: "orders", label: "Pesanan" },
+  { key: "vouchers", label: "Voucher" },
+  { key: "finance", label: "Keuangan" },
+  { key: "custom", label: "Custom" },
+  { key: "settings", label: "Setting" },
+  { key: "roles", label: "Role" },
+];
+
+const defaultManagerPermissions = Object.fromEntries(
+  managerActions.map((action) => [action.key, action.key !== "roles"]),
+) as Record<ManagerMenuKey, boolean>;
+
+const rolePermissionSql = [
+  "create table if not exists public.role_permissions (",
+  "  role text not null,",
+  "  menu_key text not null,",
+  "  enabled boolean not null default true,",
+  "  updated_at timestamptz not null default now(),",
+  "  primary key (role, menu_key)",
+  ");",
+  "",
+  "alter table public.role_permissions enable row level security;",
+  "",
+  "create policy if not exists \"Admin can manage role permissions\"",
+  "  on public.role_permissions",
+  "  for all",
+  "  using (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role = 'admin'))",
+  "  with check (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role = 'admin'));",
+  "",
+  "create policy if not exists \"Admin and manager can read role permissions\"",
+  "  on public.role_permissions",
+  "  for select",
+  "  using (exists (select 1 from public.profiles where profiles.id = auth.uid() and profiles.role in ('admin','manager')));",
+].join("\n");
 
 function roleLabel(role: Role) {
   return roles.find((item) => item.value === role)?.label || role;
@@ -42,6 +87,28 @@ export default function AdminRolesPage() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("semua");
+  const [managerPermissions, setManagerPermissions] = useState<Record<ManagerMenuKey, boolean>>(defaultManagerPermissions);
+  const [savingPermission, setSavingPermission] = useState("");
+
+  const loadManagerPermissions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("role_permissions")
+      .select("menu_key, enabled")
+      .eq("role", "manager");
+
+    if (error) {
+      setMessage(error.message.includes("role_permissions") || error.message.includes("schema cache")
+        ? `Tabel role_permissions belum ada. Jalankan SQL berikut di Supabase SQL Editor:\n\n${rolePermissionSql}`
+        : error.message);
+      return;
+    }
+
+    const savedPermissions = Object.fromEntries(
+      ((data || []) as RolePermission[]).map((item) => [item.menu_key, item.enabled]),
+    ) as Partial<Record<ManagerMenuKey, boolean>>;
+
+    setManagerPermissions({ ...defaultManagerPermissions, ...savedPermissions });
+  }, []);
 
   const loadProfiles = useCallback(async () => {
     const { data, error } = await supabase
@@ -81,12 +148,12 @@ export default function AdminRolesPage() {
       }
 
       setCurrentProfile(profileData as Profile);
-      await loadProfiles();
+      await Promise.all([loadProfiles(), loadManagerPermissions()]);
       setLoading(false);
     }
 
     checkAccessAndLoad();
-  }, [router, loadProfiles]);
+  }, [router, loadProfiles, loadManagerPermissions]);
 
   async function updateRole(profile: Profile, nextRole: Role) {
     if (currentProfile?.role !== "admin") {
@@ -143,6 +210,35 @@ export default function AdminRolesPage() {
     setProfiles((current) => current.map((item) => (item.id === profile.id ? { ...item, aktif: nextActive } : item)));
     setMessage(`User ${profile.email || profile.full_name || "user"} berhasil ${nextActive ? "diaktifkan" : "dinonaktifkan"}.`);
     setSavingId("");
+  }
+
+  async function updateManagerPermission(menuKey: ManagerMenuKey, enabled: boolean) {
+    if (currentProfile?.role !== "admin") {
+      setMessage("Hanya admin yang dapat mengubah akses manager.");
+      return;
+    }
+
+    setSavingPermission(menuKey);
+    setMessage("");
+
+    const { error } = await supabase
+      .from("role_permissions")
+      .upsert(
+        { role: "manager", menu_key: menuKey, enabled, updated_at: new Date().toISOString() },
+        { onConflict: "role,menu_key" },
+      );
+
+    if (error) {
+      setMessage(error.message.includes("role_permissions") || error.message.includes("schema cache")
+        ? `Tabel role_permissions belum ada. Jalankan SQL berikut di Supabase SQL Editor:\n\n${rolePermissionSql}`
+        : error.message);
+      setSavingPermission("");
+      return;
+    }
+
+    setManagerPermissions((current) => ({ ...current, [menuKey]: enabled }));
+    setMessage(`Akses manager untuk ${managerActions.find((action) => action.key === menuKey)?.label || menuKey} berhasil ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
+    setSavingPermission("");
   }
 
   const filteredProfiles = useMemo(() => {
@@ -222,6 +318,37 @@ export default function AdminRolesPage() {
           </div>
         </div>
 
+        <div className="mt-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-500">Manager Action</p>
+              <h2 className="mt-1 text-xl font-bold">Akses Panel Manager</h2>
+            </div>
+            <p className="text-sm text-slate-500">Toggle kiri/kanan untuk menentukan menu yang terlihat di akun Manager.</p>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {managerActions.map((action) => {
+              const enabled = managerPermissions[action.key] ?? false;
+
+              return (
+                <div key={action.key} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-bold text-slate-800">{action.label}</span>
+                  <button
+                    type="button"
+                    disabled={savingPermission === action.key}
+                    onClick={() => updateManagerPermission(action.key, !enabled)}
+                    className={`relative h-7 w-14 rounded-full transition disabled:opacity-60 ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
+                    aria-label={`${enabled ? "Nonaktifkan" : "Aktifkan"} akses manager untuk ${action.label}`}
+                  >
+                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${enabled ? "left-8" : "left-1"}`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="hidden grid-cols-[56px_1.4fr_1fr_180px_150px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 md:grid">
             <span>No</span>
@@ -278,7 +405,7 @@ export default function AdminRolesPage() {
         </div>
 
         <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          <strong>Catatan:</strong> halaman ini sudah bisa mengubah role user. Toggle detail akses manager per menu akan kita tambahkan di tahap berikutnya.
+          <strong>Catatan:</strong> jika toggle Manager Action belum bisa disimpan, jalankan SQL role_permissions yang tampil pada pesan error di Supabase SQL Editor.
         </div>
       </section>
     </main>

@@ -11,15 +11,30 @@ type Profile = {
   role: "customer" | "admin" | "manager";
 };
 
-const adminMenus = [
-  { title: "Produk", description: "Tambah, edit, stok, diskon, dan foto produk.", href: "/admin/products" },
-  { title: "Customer", description: "Lihat data customer dan status akun.", href: "/admin/customers" },
-  { title: "Pesanan", description: "Approve pembayaran, tolak, input resi, update status.", href: "/admin/orders" },
-  { title: "Voucher", description: "Buat kode promo dan atur masa berlaku.", href: "/admin/vouchers" },
-  { title: "Keuangan", description: "Ringkasan transaksi, diskon, ongkir, dan penjualan.", href: "/admin/finance" },
-  { title: "Custom", description: "Atur tampilan website, rekening checkout, welcome text, dan footer.", href: "/admin/custom" },
-  { title: "Setting", description: "Atur rekening, WhatsApp toko, bahasa, dan akses.", href: "/admin/settings" },
-  { title: "Role", description: "Atur role user dan akses manager.", href: "/admin/roles" },
+type ManagerMenuKey = "dashboard" | "products" | "customers" | "orders" | "vouchers" | "finance" | "custom" | "settings" | "roles";
+type AdminMenu = { key: ManagerMenuKey; title: string; description: string; href: string };
+
+const defaultManagerPermissions = {
+  dashboard: true,
+  products: true,
+  customers: true,
+  orders: true,
+  vouchers: true,
+  finance: true,
+  custom: true,
+  settings: true,
+  roles: false,
+} satisfies Record<ManagerMenuKey, boolean>;
+
+const adminMenus: AdminMenu[] = [
+  { key: "products", title: "Produk", description: "Tambah, edit, stok, diskon, dan foto produk.", href: "/admin/products" },
+  { key: "customers", title: "Customer", description: "Lihat data customer dan status akun.", href: "/admin/customers" },
+  { key: "orders", title: "Pesanan", description: "Approve pembayaran, tolak, input resi, update status.", href: "/admin/orders" },
+  { key: "vouchers", title: "Voucher", description: "Buat kode promo dan atur masa berlaku.", href: "/admin/vouchers" },
+  { key: "finance", title: "Keuangan", description: "Ringkasan transaksi, diskon, ongkir, dan penjualan.", href: "/admin/finance" },
+  { key: "custom", title: "Custom", description: "Atur tampilan website, rekening checkout, welcome text, dan footer.", href: "/admin/custom" },
+  { key: "settings", title: "Setting", description: "Atur rekening, WhatsApp toko, bahasa, dan akses.", href: "/admin/settings" },
+  { key: "roles", title: "Role", description: "Atur role user dan akses manager.", href: "/admin/roles" },
 ];
 
 export default function AdminPage() {
@@ -28,6 +43,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [desktopPanelOpen, setDesktopPanelOpen] = useState(true);
+  const [managerPermissions, setManagerPermissions] = useState<Record<ManagerMenuKey, boolean>>(defaultManagerPermissions);
 
   useEffect(() => {
     async function checkAccess() {
@@ -51,11 +67,31 @@ export default function AdminPage() {
       }
 
       setProfile(data);
+
+      if (data.role === "manager") {
+        const { data: permissions } = await supabase
+          .from("role_permissions")
+          .select("menu_key, enabled")
+          .eq("role", "manager");
+
+        if (permissions) {
+          setManagerPermissions({
+            ...defaultManagerPermissions,
+            ...Object.fromEntries(permissions.map((item) => [item.menu_key, item.enabled])),
+          });
+        }
+      }
+
       setLoading(false);
     }
 
     checkAccess();
   }, [router]);
+
+  const canSeeDashboard = profile?.role !== "manager" || managerPermissions.dashboard;
+  const visibleMenus = profile?.role === "manager"
+    ? adminMenus.filter((menu) => managerPermissions[menu.key])
+    : adminMenus;
 
   async function logout() {
     await supabase.auth.signOut();
@@ -96,10 +132,12 @@ export default function AdminPage() {
         </div>
         <h1 className="mt-2 text-2xl font-bold">Admin Panel</h1>
         <nav className="mt-8 grid gap-2">
-          <Link href="/admin" onClick={() => setPanelOpen(false)} className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white">
-            Dashboard
-          </Link>
-          {adminMenus.map((menu) => (
+          {canSeeDashboard && (
+            <Link href="/admin" onClick={() => setPanelOpen(false)} className="rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white">
+              Dashboard
+            </Link>
+          )}
+          {visibleMenus.map((menu) => (
             <Link key={menu.href} href={menu.href} onClick={() => setPanelOpen(false)} className="rounded-md px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
               {menu.title}
             </Link>
@@ -175,7 +213,7 @@ export default function AdminPage() {
           <section className="mt-8">
             <h3 className="text-xl font-bold">Menu Pengelolaan</h3>
             <div className="mt-4 grid grid-cols-4 gap-2">
-              {adminMenus.map((menu) => (
+              {visibleMenus.map((menu) => (
                 <Link key={menu.href} href={menu.href} className="rounded-md border border-slate-200 bg-white px-2 py-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:px-3 sm:py-3">
                   <h4 className="truncate text-xs font-bold sm:text-sm lg:text-base">{menu.title}</h4>
                   <p className="mt-1 hidden text-xs leading-5 text-slate-600 sm:line-clamp-2 sm:block">{menu.description}</p>
