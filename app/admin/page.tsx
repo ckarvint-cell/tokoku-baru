@@ -19,6 +19,7 @@ const adminMenus = [
   { title: "Keuangan", description: "Ringkasan transaksi, diskon, ongkir, dan penjualan.", href: "/admin/finance" },
   { title: "Custom", description: "Atur tampilan website, rekening checkout, welcome text, dan footer.", href: "/admin/custom" },
   { title: "Setting", description: "Atur rekening, WhatsApp toko, bahasa, dan akses.", href: "/admin/settings" },
+  { title: "Role", description: "Atur role user dan akses manager.", href: "/admin/roles" },
 ];
 
 export default function AdminPage() {
