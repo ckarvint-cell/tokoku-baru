@@ -974,34 +974,34 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Pesanan Baru</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.total}</p>
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-2 xl:grid-cols-7">
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Pesanan Baru</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.total}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Ongkir</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguOngkir}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Menunggu Ongkir</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.menungguOngkir}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Pembayaran</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguPembayaran}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Menunggu Pembayaran</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.menungguPembayaran}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Menunggu Konfirmasi</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.menungguKonfirmasi}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Menunggu Konfirmasi</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.menungguKonfirmasi}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Diproses</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.proses}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Diproses</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.proses}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Sedang Dikirim</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.sedangDikirim}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Sedang Dikirim</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.sedangDikirim}</p>
           </div>
-          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-semibold leading-tight text-slate-500">Ditolak</p>
-            <p className="mt-1 text-xl font-bold leading-none">{counts.ditolak}</p>
+          <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
+            <p className="text-[9px] font-semibold leading-tight text-slate-500 sm:text-[11px]">Ditolak</p>
+            <p className="mt-1 text-base font-bold leading-none sm:text-xl">{counts.ditolak}</p>
           </div>
         </div>
 
