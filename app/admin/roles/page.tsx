@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 type Role = "admin" | "manager" | "customer";
+type RoleFilter = Role | "semua";
 
 type Profile = {
   id: string;
@@ -13,6 +14,7 @@ type Profile = {
   email: string | null;
   role: Role;
   created_at?: string | null;
+  aktif?: boolean | null;
 };
 
 const roles: { value: Role; label: string }[] = [
@@ -39,19 +41,22 @@ export default function AdminRolesPage() {
   const [savingId, setSavingId] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("semua");
 
   const loadProfiles = useCallback(async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, email, role, created_at")
+      .select("id, full_name, email, role, created_at, aktif")
       .order("created_at", { ascending: false });
 
     if (error) {
-      setMessage(error.message);
+      setMessage(error.message.includes("aktif") || error.message.includes("schema cache")
+        ? "Kolom aktif belum ada di tabel profiles. Jalankan SQL: alter table public.profiles add column if not exists aktif boolean not null default true;"
+        : error.message);
       return;
     }
 
-    setProfiles((data || []) as Profile[]);
+    setProfiles(((data || []) as Profile[]).map((profile) => ({ ...profile, aktif: profile.aktif ?? true })));
   }, []);
 
   useEffect(() => {
@@ -108,16 +113,50 @@ export default function AdminRolesPage() {
     setSavingId("");
   }
 
+  async function updateActiveStatus(profile: Profile, nextActive: boolean) {
+    if (currentProfile?.role !== "admin") {
+      setMessage("Hanya admin yang dapat mengubah status user.");
+      return;
+    }
+
+    if (profile.role === "admin" && !nextActive) {
+      setMessage("Admin tidak bisa dinonaktifkan.");
+      return;
+    }
+
+    setSavingId(profile.id);
+    setMessage("");
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ aktif: nextActive })
+      .eq("id", profile.id);
+
+    if (error) {
+      setMessage(error.message.includes("aktif") || error.message.includes("schema cache")
+        ? "Kolom aktif belum ada di tabel profiles. Jalankan SQL: alter table public.profiles add column if not exists aktif boolean not null default true;"
+        : error.message);
+      setSavingId("");
+      return;
+    }
+
+    setProfiles((current) => current.map((item) => (item.id === profile.id ? { ...item, aktif: nextActive } : item)));
+    setMessage(`User ${profile.email || profile.full_name || "user"} berhasil ${nextActive ? "diaktifkan" : "dinonaktifkan"}.`);
+    setSavingId("");
+  }
+
   const filteredProfiles = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return profiles;
 
     return profiles.filter((profile) => {
-      return [profile.full_name, profile.email, profile.role]
+      const matchesRole = roleFilter === "semua" || profile.role === roleFilter;
+      const matchesSearch = !keyword || [profile.full_name, profile.email, profile.role]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
+
+      return matchesRole && matchesSearch;
     });
-  }, [profiles, search]);
+  }, [profiles, search, roleFilter]);
 
   if (loading) {
     return (
@@ -154,7 +193,7 @@ export default function AdminRolesPage() {
         )}
 
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-[1fr_220px_auto] md:items-end">
             <label className="grid gap-2 text-sm font-bold">
               Cari User
               <input
@@ -164,6 +203,19 @@ export default function AdminRolesPage() {
                 className="rounded-md border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-400"
               />
             </label>
+            <label className="grid gap-2 text-sm font-bold">
+              Filter Role
+              <select
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+                className="rounded-md border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-400"
+              >
+                <option value="semua">Semua role</option>
+                {roles.map((role) => (
+                  <option key={role.value} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+            </label>
             <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700">
               {filteredProfiles.length} user
             </div>
@@ -171,15 +223,20 @@ export default function AdminRolesPage() {
         </div>
 
         <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[1.4fr_1fr_180px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+          <div className="hidden grid-cols-[56px_1.4fr_1fr_180px_150px] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 md:grid">
+            <span>No</span>
             <span>User</span>
             <span>Role Saat Ini</span>
             <span>Ubah Role</span>
+            <span>Status</span>
           </div>
 
           <div className="divide-y divide-slate-100">
-            {filteredProfiles.map((profile) => (
-              <div key={profile.id} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[1.4fr_1fr_180px] md:items-center">
+            {filteredProfiles.map((profile, index) => (
+              <div key={profile.id} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[56px_1.4fr_1fr_180px_150px] md:items-center">
+                <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400 md:text-sm md:tracking-normal md:text-slate-700">
+                  <span className="md:hidden">No: </span>{index + 1}
+                </div>
                 <div className="min-w-0">
                   <p className="truncate font-bold text-slate-950">{profile.full_name || "Tanpa nama"}</p>
                   <p className="truncate text-xs text-slate-500">{profile.email || "Email belum ada"}</p>
@@ -198,6 +255,16 @@ export default function AdminRolesPage() {
                   {roles.map((role) => (
                     <option key={role.value} value={role.value}>{role.label}</option>
                   ))}
+                </select>
+                <select
+                  value={(profile.aktif ?? true) ? "aktif" : "nonaktif"}
+                  disabled={savingId === profile.id || profile.role === "admin"}
+                  onChange={(event) => updateActiveStatus(profile, event.target.value === "aktif")}
+                  title={profile.role === "admin" ? "Admin tidak bisa dinonaktifkan." : undefined}
+                  className={`rounded-md border px-3 py-2 text-sm font-bold outline-none disabled:cursor-not-allowed disabled:opacity-60 ${(profile.aktif ?? true) ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}
+                >
+                  <option value="aktif">Aktif</option>
+                  <option value="nonaktif">Nonaktif</option>
                 </select>
               </div>
             ))}
